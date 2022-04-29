@@ -224,7 +224,8 @@ gsensY = function(data,
     # rename estimate column to est.std as in standardizedSolution()
     colnames(results)[1] <- "est.std"
     
-    pe$pvalue = formatC(2*pnorm(-abs(pe$z)), digits = 5)
+    
+    results$pvalue = formatC(2*pnorm(-abs(results$z)), digits = 3)
     
     
     ## Print results
