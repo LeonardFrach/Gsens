@@ -2,8 +2,7 @@
 % Please edit documentation in R/gsens.R
 \name{gsensXY}
 \alias{gsensXY}
-\title{Adjusting for genetic confounding using PGS for the exposure and the outcome
-Adjusting for genetic confounding in exposure-outcome associations using the polygenic score for the exposure and the outcome}
+\title{Adjusting for genetic confounding using PGS for the exposure and the outcome}
 \usage{
 gsensXY(
   rxy,
@@ -47,8 +46,7 @@ Estimates for the adjusted exposure-outcome associations, exposure-mediated gene
 genetic confounding and genetic overlap.
 }
 \description{
-Adjusting for genetic confounding using PGS for the exposure and the outcome
-Adjusting for genetic confounding in exposure-outcome associations using the polygenic score for the exposure and the outcome
+Adjusting for genetic confounding in exposure-outcome associations using the polygenic score for the exposure and the outcome.
 }
 \references{
 Pingault, J.-B., O’Reilly, P. F., Schoeler, T., Ploubidis, G. B., Rijsdijk, F., & Dudbridge, F. (2018).

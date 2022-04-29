@@ -2,9 +2,7 @@
 % Please edit documentation in R/gsens.R
 \name{gsensY}
 \alias{gsensY}
-\title{Adjusting for genetic confounding using PGS for the outcome
-Adjusting for genetic confounding in exposure-outcome associations using the polygenic score for the outcome.
-This is the recommended function for most scenarios, and the only function that has been extended to the multiple exposure case.}
+\title{Adjusting for genetic confounding using PGS for the outcome}
 \usage{
 gsensY(
   data,
@@ -54,7 +52,6 @@ Estimates for the adjusted exposure-outcome associations, exposure-mediated gene
 genetic confounding and genetic overlap.
 }
 \description{
-Adjusting for genetic confounding using PGS for the outcome
 Adjusting for genetic confounding in exposure-outcome associations using the polygenic score for the outcome.
 This is the recommended function for most scenarios, and the only function that has been extended to the multiple exposure case.
 }
