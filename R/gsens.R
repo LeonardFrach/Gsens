@@ -2,7 +2,7 @@ load.lib = c('lavaan', 'dplyr', 'parallel')
 install.lib <- load.lib[!load.lib %in% installed.packages()] # Install missing libraries
 sapply(load.lib, require, character = TRUE) # Load libraries
 
-#' Adjusting for genetic confounding using PGS for the outcome
+#' @title Adjusting for genetic confounding using PGS for the outcome
 
 #' Adjusting for genetic confounding in exposure-outcome associations using the polygenic score for the outcome.
 #' This is the recommended function for most scenarios, and the only function that has been extended to the multiple exposure case.
@@ -241,9 +241,9 @@ gsensY = function(data,
 
 
 
-#' Adjusting for genetic confounding using PGS for the exposure
+#' @title Adjusting for genetic confounding using PGS for the exposure
 
-#' Adjusting for genetic confounding in exposure-outcome associations using the polygenic score for the exposure
+#' Adjusting for genetic confounding in exposure-outcome associations using the polygenic score for the exposure.
 
 #' @param rxy The observed phenotypic correlation between exposure X and outcome Y.
 #' @param rgx The observed correlation between the polygenic score for X and exposure X.
@@ -312,7 +312,7 @@ gsensX = function(rxy,
 
 ## Two polygenic scores ##
 
-#' Adjusting for genetic confounding using PGS for the exposure and the outcome
+#' @title Adjusting for genetic confounding using PGS for the exposure and the outcome
 
 #' Adjusting for genetic confounding in exposure-outcome associations using the polygenic score for the exposure and the outcome
 
