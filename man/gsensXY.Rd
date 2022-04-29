@@ -42,8 +42,8 @@ gsensXY(
 \item{print}{Optional. Enables the examination of model parameters (default = FALSE).}
 }
 \value{
-Estimates for the adjusted exposure-outcome associations, exposure-mediated genetic effects,
-genetic confounding and genetic overlap.
+Estimates for the adjusted exposure-outcome association,
+genetic confounding and the total effect.
 }
 \description{
 Adjusting for genetic confounding in exposure-outcome associations using the polygenic score for the exposure and the outcome.
