@@ -253,8 +253,8 @@ gsensY = function(data,
 #' @param print Optional. Enables the examination of model parameters (default = FALSE).
 #' @param constrain Optional. Argument to constrain model parameters (default = NULL).
 
-#' @return Estimates for the adjusted exposure-outcome associations, exposure-mediated genetic effects,
-#' genetic confounding and genetic overlap.
+#' @return Estimates for the adjusted exposure-outcome associations, 
+#' genetic confounding and the total effect.
 
 #' @author Jean-Baptiste Pingault, Tabea Schoeler & Frank Dudbridge
 #' @export
@@ -328,8 +328,8 @@ gsensX = function(rxy,
 #' @param print Optional. Enables the examination of model parameters (default = FALSE).
 #' @param constrain Optional. Argument to constrain model parameters (default = NULL).
 
-#' @return Estimates for the adjusted exposure-outcome associations, exposure-mediated genetic effects,
-#' genetic confounding and genetic overlap.
+#' @return Estimates for the adjusted exposure-outcome associations,
+#' genetic confounding and the total effect.
 
 #' @author Jean-Baptiste Pingault, Tabea Schoeler & Frank Dudbridge
 #' @export
