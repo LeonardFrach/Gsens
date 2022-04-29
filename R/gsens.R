@@ -1,3 +1,7 @@
+load.lib = c('lavaan', 'dplyr', 'parallel')
+install.lib <- load.lib[!load.lib %in% installed.packages()] # Install missing libraries
+sapply(load.lib, require, character = TRUE) # Load libraries
+
 #' Adjusting for genetic confounding using PGS for the outcome
 
 #' Adjusting for genetic confounding in exposure-outcome associations using the polygenic score for the outcome.
@@ -42,8 +46,6 @@
 #' Adjusting for genetic confounding using polygenic scores within structural equation models
 #' @references Pingault, J. B., Rijsdijk, F., Schoeler, T., Choi, S. W., Selzam, S., Krapohl, E., ... & Dudbridge, F. (2021).
 #' Genetic sensitivity analysis: Adjusting for genetic confounding in epidemiological associations. PLoS genetics, 17(6), e1009590. https://doi.org/10.1371/journal.pgen.1009590
- 
-
 
 gsensY = function(data,
                   sample.nobs = NULL,

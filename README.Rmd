@@ -4,7 +4,12 @@ author: "Leonard Frach, Tabea Schoeler, Frank Dudbridge & Jean-Baptiste Pingault
 date: "28 April 2022"
 output: github_document
 ---
- 
+
+
+
+### Note
+
+This tutorial will be updated soon.
 
 ### Overview
 #### [1: Introduction](#link1)
@@ -51,10 +56,9 @@ The following examples are based on the correlation matrix between polygenic sco
 
 
 ```{r, results = "hide",message = FALSE,  echo=FALSE  }
-HOME=getwd()
+HOME = getwd()
 setwd(paste0(HOME, "/R"))
 source('gsens.R')
-x=3
 ```
 
 # Installation of Gsens
@@ -107,11 +111,13 @@ For this, we need to specify 5 parameters:
 
 
 ```{r}
-gsensY(rxy = 0.3975,
-       rgx = 0.2909,
-       rgy = 0.3462,
-       n = 3785,
-       h2 = 0.3462^2)
+# gsensY(rxy = 0.3975,
+#        rgx = 0.2909,
+#        rgy = 0.3462,
+#        n = 3785,
+#        h2 = 0.3462^2)
+
+# old function
 ```
 
 
@@ -142,11 +148,14 @@ Here, h2 = 0.31, which corresponds to the SNP-heritability of Y (child GCSE scor
 
 
 ```{r}
-gsensY(rxy = 0.3975,
-       rgx = 0.2909,
-       rgy = 0.3462,
-       n = 3785,
-       h2 = 0.31)
+# gsensY(rxy = 0.3975,
+#        rgx = 0.2909,
+#        rgy = 0.3462,
+#        n = 3785,
+#        h2 = 0.31)
+
+# old function
+
 ```
 
 The results show that under a SNP heritability scenario, the effect of maternal education on child educational achievement is attenuated (B=0.176) relative to when controlling for observed polygenic scores (B=0.325).
@@ -159,11 +168,14 @@ We do this below by specifying that rgx (i.e., the correlation between the child
 We also specify that the rgy (i.e., the correlation between the child's genetics with their own educational achievement) reflects SNP heritability (by taking the square root the heritability estimate to get the corresponding path value).
 
 ```{r}
-gsensY(rxy = 0.3975,
-       rgx = 0.5*sqrt(.31),
-       rgy = sqrt(.31),
-       n = 3785,
-       h2 = 0.31)
+# gsensY(rxy = 0.3975,
+#        rgx = 0.5*sqrt(.31),
+#        rgy = sqrt(.31),
+#        n = 3785,
+#        h2 = 0.31)
+
+# old function
+
 ```
 
 In this fixed solution, rgx and rgy and are therefore set to their value under the heritability scenario, rather than the observed value from the polygenic score.
@@ -244,11 +256,14 @@ All model parameters should be systematically checked after fitting a model, and
 Findings for the constrained vs the unconstrained model diverge. We can use gsensY to adjust for the outcome-related polygenic score only, here BMI. Note that in theory, if the polygenic score for the outcome was perfect, adjusting for that polygenic score would be sufficient as it would capture shared genetic influences between X and Y. Findings from adjusting for the BMI polygenic score only converge with the constrained version of the two polygenic score approach.
 
 ```{r}
-gsensY(rxy = -0.0894,
-       rgx = -0.0839,
-       rgy = 0.2524,
-       n = 3663,
-       h2 = 0.2524^2)
+# gsensY(rxy = -0.0894,
+#        rgx = -0.0839,
+#        rgy = 0.2524,
+#        n = 3663,
+#        h2 = 0.2524^2)
+
+# old function
+
 ```
 
 ## Heritability scenario
