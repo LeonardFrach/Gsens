@@ -1,4 +1,4 @@
-load.lib = c('lavaan', 'dplyr', 'parallel')
+load.lib = c('lavaan', 'dplyr', 'parallel', 'purrr') 
 install.lib <- load.lib[!load.lib %in% installed.packages()] # Install missing libraries
 sapply(load.lib, require, character = TRUE) # Load libraries
 
@@ -7,40 +7,33 @@ sapply(load.lib, require, character = TRUE) # Load libraries
 #' Adjusting for genetic confounding in exposure-outcome associations using the polygenic score for the outcome.
 #' This is the recommended function for most scenarios, and the only function that has been extended to the multiple exposure case.
  
-#' @param data Either a data frame of raw data or a covariance/correlation matrix. 
-#' Must contain the variables G (PGS for Y), Y (outcome) and X (exposure) or instead X1, X2, ..., Xi if multiple exposures are used.
-#' If data is a cov/cor matrix, the additional argument sample.nobs is required.
-#' @param sample.nobs Optional. Number of observations used for the data.
-#' Only necessary if input is a covariance or correlation matrix.
+#' @param data Either a data frame of raw data or a covariance/correlation matrix, although the latter one is currently not recommended.
+#' If 'data' is a cov/cor matrix, the additional lavaan argument 'sample.nobs' (number of observations) is required.
 #' @param h2 Heritability estimate of the outcome (Y).
 #' Can be chosen to be any external value, e.g. SNP- or twin-heritability estimates.
-#' @param estimator Optional. Type of estimator used.
-#' Can be any estimator for continuous data implemented in lavaan, e.g. "ML" or "GLS" (default = "GLS").
-#' @param se Optional. Method to compute standard errors, can be any method implemented in lavaan,
-#' e.g. "robust.sem" or "bootstrap". If se = "bootstrap", bootstrapping *cannot* be used for estimation of confidence intervals,
-#' which is however strongly recommended (default = "standard").
-#' @param boot.ci.type Bootstrapping method used to compute the confidence intervals,
-#' can be any method implemented in lavaan. Default is "perc".
-#' @param fmi Optional. If full-information maximum likelihood estimation is desired (estimator = "ML", missing "ML"),
-#' and fmi = TRUE, missingness is reported (default = FALSE).
-#' @param print Optional. Can be one of c("exposure", "mediation", "confounding", "overlap", "all" or "summary").
-#' If print = "all", all relevant parameters will be printed.
-#' If print = "summary", the lavaan output of the summary() function will be printed (default = "summary").
-#' @param ... Additional arguments passed from lavaan, including 'bootstrap' (number of bootstraps for CIs, default = 1000)
-#' and 'constraints' (constraints on the model).
- 
+#' @param exposures Vector of variable name(s) of the exposure(s). 
+#' Example: exposures = c("x1", "x2")
+#' @param outcome Name of the outcome variable.
+#' @param pgs Name of the polygenic score variable (pgs corresponding to the outcome).
+#' @param print Optional. Can be one of c("exposure", "mediation", "confounding", "overlap", or "summary").
+#' If print = "summary", the lavaan output of the summary() function will be printed (default = NULL; gsensY will return all parameter estimates).
+#' @param ... Additional arguments passed from lavaan, including 'se' (estimation method for the standard errors), 
+#' 'estimator' (estimator used for model, default is ML), 'bootstrap' (number of bootstraps for CIs, default = 1000),
+#' 'sample.nobs' (Number of observations for estimation using summary data, not recommended), and more.
+#' See the lavaan documentation for details, e.g., ?lavaan::lavaan(), ?lavaan::lavOptions() or ?lavaan::parameterEstimates()
 #' @return Estimates for the adjusted exposure-outcome associations, exposure-mediated genetic effects,
 #' genetic confounding and genetic overlap.
 
 #' @examples
-#' df <- data.frame(G, X1, X2, Y) 
-#' gsensY(df, h2 = 0.5);
+#' df <- data.frame(X1, X2, X3, Y, PGS_outcome) 
+#' gsensY(df, , h2 = 0.5, exposures = c("X1", "X2", "X3"), outcome = "Y", pgs = "PGS_outcome");
 
 #' @author Leonard Frach & Jean-Baptiste Pingault
 #' @export
 #' @import lavaan
 #' @import parallel
 #' @import dplyr
+#' @import purrr
 
 #' @references Frach, L., Rijsdijk, F., Dudbridge, F. & Pingault, J. B. (in preparation).
 #' Adjusting for genetic confounding using polygenic scores within structural equation models
@@ -48,82 +41,100 @@ sapply(load.lib, require, character = TRUE) # Load libraries
 #' Genetic sensitivity analysis: Adjusting for genetic confounding in epidemiological associations. PLoS genetics, 17(6), e1009590. https://doi.org/10.1371/journal.pgen.1009590
 
 gsensY = function(data,
-                  sample.nobs = NULL,
                   h2,
-                  estimator = "GLS",
-                  se = "standard",
-                  boot.ci.type = "perc",
-                  fmi = F, 
-                  print = "summary", ...) {
+                  exposures,
+                  outcome,
+                  pgs,
+                  print = "all", ...) {
     
+    # additional forwarded arguments
+    Args <- NULL
+    Args <- list(...)
+    Args <- as.data.frame(Args)
+
+    args_lav <- NULL
+    args_est <- NULL
     
+    if (!is.null(Args)) {
+        args_lav <- Args %>%
+            purrr::keep(names(.) %in% names(formals(lavaan::lavaan)) | names(.) %in%
+                            names(lavaan::lavOptions()))
+                            # c("missing", "se",
+                            #   "bootstrap", "parallel", "ncpus", "test", "estimator"))
+        
+        args_lav <- as.data.frame(args_lav)
+
+        args_est <- Args %>% #
+            purrr:::keep(names(.) %in% names(formals(lavaan::parameterEstimates))) %>%
+            purrr::discard(names(.) == "se")
+
+        args_est <- as.data.frame(args_est)
+
+    }
+    
+
     if (dim(data)[1] != dim(data)[2]) {
         message("Using raw data as input.")
         
         data <- as.data.frame(data)
         
+        # use only relevant variables
+        data <- data %>% 
+            dplyr::select(all_of(c(exposures, outcome, pgs)))
+        
+        # number of exposure
+        NX <- length(exposures) 
+
+        names(data)[c((NX + 1):(NX + 2))] <- c("Y","G")
+        
         # no correlation matrix
-        cor <- NULL
+        cov <- NULL
         
-        # standardize all variables
-        data <- data %>% mutate_all(scale)
-        message("Your variables have been standardized.")
+    } else if (dim(data)[1] == dim(data)[2] & 
+               all(diag(data) == 1)) {
+        message("Using correlation matrix as input. Warning: standard errors might be biased downwards when using correlation matrices in lavaan.")
         
-    } else if (dim(data)[1] == dim(data)[2] & all(diag(data) == 1)) {
-        message("Using correlation matrix as input.")
-        
-        cor <- data
+        cov <- as.matrix(data)
         data <- as.data.frame(data)
         
-    } else if (dim(data)[1] == dim(data)[2] & !all(diag(data) == 1)) {
-        message("Converting covariance matrix to correlation matrix.")
+    } else if (dim(data)[1] == dim(data)[2] & 
+               !all(diag(data) == 1)) {
+        message("Using covariance matrix as input.")
         
-        cor <- cov2cor(data)
-        data <- as.data.frame(cor)
+        cov <- as.matrix(data)
     }
     
     
-    # select exposures
-    namesX <- colnames(select(data, dplyr::starts_with("X")))
-    NX <- length(namesX) 
-    
-    
-    # check if the data frame contains more variables than needed
-    if (dim(data)[2] > (NX + 2)) {
-        stop("Your data contain unused variables.")
-    }
-    
-    
-    # create list of required column names (alternatively use lapply) 
-    for (i in 1:NX) {
-        namesX[i] <- paste("X", i, sep = "")
-        names <- c(namesX, "Y", "G", "X")
-    }
-    
-    
-    # check if col names are in data frame. X is optional, X1 would also be acceptable when using only one exposure.
-    if (all((names %in% colnames(data))[1:length(names) - 1]) == T |
-        all((names %in% colnames(data))[2:length(names)]) == T) {
-    } else {
-        stop("Your data do not contain all the required variable names: G, Y and X/X1")
-    }
-    
+    # if correlation matrix is used
+    if (!is.null(cov)) {
+        data <- NULL
+        # N of exposures
+        NX <- length(exposures) 
+        # select relevant variables
+        
+        cov <- cov %>% as.data.frame() %>%
+            dplyr::select(all_of(c(exposures, outcome, pgs))) %>%
+            dplyr::filter(rownames(.) %in% colnames(.))
+        
+        colnames(cov)[c((NX + 1):(NX + 2))] <- c("Y", "G")
+        
+        cov <- cov[c(exposures, outcome, pgs), ]
+        cov <- as.matrix(cov)
+
+    } 
     
     # create covariance structure and label for the model
     
-    covstruc <- outer(namesX, namesX, function(x, y) paste(x, "~~", y))
+    covstruc <- outer(exposures, 
+                      exposures, 
+                      function(x, y) paste(x, "~~", y))
     labelsa = paste0("a", 1:NX) 
     labelsb = paste0("b", 1:NX)
     labelsm = paste0("m", 1:NX)
     labels_gc = paste0("gc_", labelsb)
     labels_go = paste0("go_", labelsb)
     
-    # if correlation matrix is used
-    if (!is.null(cor)) {
-        data <- NULL
-    }
-    
-    
+
     ### main lavaan model ###
     
     gC <- numeric() 
@@ -132,12 +143,12 @@ gsensY = function(data,
     ## model specification
     
     model = c(
-        paste("Y ~", paste0(c(labelsb,"c"),"*", c(namesX,"GG"), collapse = " + ")),    # Y depends on X and true polygenic score
-        paste(namesX,"~", paste0(labelsa,"*","GG")),                                   # X1-Xi depend on true polygenic score
+        paste("Y ~", paste0(c(labelsb,"c"),"*", c(exposures,"GG"), collapse = " + ")),    # Y depends on X and true polygenic score
+        paste(exposures,"~", paste0(labelsa,"*","GG")),                                   # X1-Xi depend on true polygenic score
         covstruc[lower.tri(covstruc, diag = TRUE)],                                    # covariance structure 
         "GG =~ l*G" , 
         "GG ~~ 1*GG",
-        "G ~~ me*G",
+        "G ~~ me*G", # rename me here, because it is not measurement error here
         "Y ~~ Y",
         # total mediation effect
         paste("m :=", paste0(labelsa,"*",labelsb, collapse = " + ")),
@@ -146,44 +157,65 @@ gsensY = function(data,
         paste0("h := ","t(matrix(","c(", 
                paste0(labelsa, collapse = ", "),")))"," %*% ","matrix(c(", 
                paste0(labelsb, collapse = ", "),"))"," + c"),
-        paste('h == sqrt(',h2,')'),
+        paste('h == sqrt(', h2,')'),
         for (i in 1:NX) {                                                              # genetic confounding for each Xi->Y association 
-            gC <- c(gC, paste0(labels_gc[i], " := ", paste0(labelsa[i],"*", labelsb[-i],"*", labelsa[-i],
-                                                            collapse = " + "), " + ", labelsa[i], "*c")) 
+            gC <- c(gC, paste0(labels_gc[i], " := ", 
+                               paste0(labelsa[i],"*", labelsb[-i],"*", labelsa[-i],
+                                      collapse = " + "), " + ", labelsa[i], "*c")) 
         },
         gC,
         paste0(labels_go, " := ", labelsa,"*", labelsa,"*", labelsb, " + ", labels_gc) # genetic overlap for each Xi->Y association 
     )
     
     
-    ## model estimation
+    ## model estimation options
     
-    # number of cores for parallelization, if more than one core available, number of cores minus 1
-    nCores <- ifelse(parallel::detectCores() == 1, 1, parallel::detectCores() - 1)
-    
-    if(se == "bootstrap") {
-        message("Bootstrapping will be performed for the standard errors. This might take a while.")
+    opt <- lavaan::lavOptions()
+    opt2 <- c(formals(lavaan), opt)
+
+    if (!is.null(args_lav)) {
+        ok.names <- names(opt2)
+        dot.names <- names(args_lav)
+        wrong.idx <- which(!dot.names %in% ok.names)
+        
+        if (!is_empty(wrong.idx)) {
+            message("Gsens Warning: Check dots.")
+        }
+        
+        opt <- modifyList(opt, args_lav)
     }
     
-    fit <- lavaan(model, data = data, sample.nobs = sample.nobs, sample.cov = cor,
-                  estimator = estimator, se = se, ...)
+    opt_lav <- list(model = model, data = data, sample.cov = cov)
+    opt_all <- c(opt_lav, opt)
+
+    
+    # run model
+    fit_mod <- do.call('lavaan', args = opt_all)
     
     
-    ## parameter estimates
+    ## parameter estimates options
     
-    # if FIML is desired, proportion of missingness can be reported
-    if (fmi) {
-        pe <- parameterEstimates(fit, standardized = T, boot.ci.type = boot.ci.type, fmi = T)
-        
-    } else if (se != "bootstrap") {
-        pe <- parameterEstimates(fit, boot.ci.type = boot.ci.type, standardized = T)
+    opt <- formals(parameterEstimates)
+    
+    if (is.null(args_est)) {
+        pe <- parameterEstimates(fit_mod)
         
     } else {
-        pe <- parameterEstimates(fit, standardized = T)
-    }
-    
-    if(se == "bootstrap") {
-        warning("Bootstrapping was NOT used for estimation of confidence intervals, which is however, strongly recommended. Consider changing your se = 'bootstrap' argument.")
+        ok.names <- names(opt)
+        dot.names <- names(args_est)
+        wrong.idx <- which(!dot.names %in% ok.names)
+        
+        if (!is_empty(wrong.idx)) {
+            message("Gsens Warning: Check dots.")
+        }
+        
+        opt <- modifyList(opt, args_est)
+        
+        opt_pe <- list(fit_mod)
+        opt_all <- c(opt_pe, opt)
+        
+        pe <- do.call('parameterEstimates', args = opt_all)
+        
     }
     
     results <- data.frame(rbind(
@@ -192,7 +224,7 @@ gsensY = function(data,
         pe[pe$label %in% "m",],
         pe[pe$label %in% labels_gc,],
         pe[pe$label %in% labels_go,]
-    ))[, c(5:10)]
+    ))[, c(5:dim(pe)[2])]
     
     results <- results %>%
         mutate_if(is.numeric, round, 3) # round all numeric variables
@@ -221,16 +253,13 @@ gsensY = function(data,
         rownames(results)[3*NX + i] <- c(paste("Genetic overlap x", (i - 1), "y", sep = ""))
     }  
     
-    # rename estimate column to est.std as in standardizedSolution()
-    colnames(results)[1] <- "est.std"
+    results$pvalue = as.numeric(formatC(2*pnorm(-abs(results$z)), digits = 3))
     
-    
-    results$pvalue = formatC(2*pnorm(-abs(results$z)), digits = 3)
-    
+    gsens <- results
+    #return(gsens)
     
     ## Print results
-    
-    if (print == "summary") {summary(fit, standardized = T)}
+    if (print == "summary") {print(summary(fit_mod))}
     if (print == "exposure") {print(results[1:NX, ])} 
     if (print == "mediation") {print(results[(NX + 1):(3*NX - 1), ])} 
     if (print == "confounding") {print(results[(3*NX):(4*NX - 1), ])} 
@@ -238,6 +267,7 @@ gsensY = function(data,
     if (print == "all") {print(results)} 
     
 }  
+
 
 
 
