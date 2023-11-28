@@ -26,7 +26,7 @@ sapply(load.lib, require, character = TRUE) # Load libraries
 
 #' @examples
 #' df <- data.frame(X1, X2, X3, Y, PGS_outcome) 
-#' gsensY(df, , h2 = 0.5, exposures = c("X1", "X2", "X3"), outcome = "Y", pgs = "PGS_outcome");
+#' gsensY(df, h2 = 0.5, exposures = c("X1", "X2", "X3"), outcome = "Y", pgs = "PGS_outcome");
 
 #' @author Leonard Frach & Jean-Baptiste Pingault
 #' @export
@@ -178,7 +178,7 @@ gsensY = function(data,
         dot.names <- names(args_lav)
         wrong.idx <- which(!dot.names %in% ok.names)
         
-        if (!is_empty(wrong.idx)) {
+        if (!purrr::is_empty(wrong.idx)) {
             message("Gsens Warning: Check dots.")
         }
         
@@ -205,7 +205,7 @@ gsensY = function(data,
         dot.names <- names(args_est)
         wrong.idx <- which(!dot.names %in% ok.names)
         
-        if (!is_empty(wrong.idx)) {
+        if (!purrr::is_empty(wrong.idx)) {
             message("Gsens Warning: Check dots.")
         }
         
