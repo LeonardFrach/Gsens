@@ -1,21 +1,9 @@
-Gsens
+Simple simulated data set and example
 ================
-Leonard Frach, Tabea Schoeler, Frank Dudbridge & Jean-Baptiste Pingault,
-28 April 2022
+Leo Frach
+2023-11-28
 
-### Note
-
-This tutorial will be updated soon.
-
-### Overview
-
-#### [1: Introduction](#link1)
-
-#### [2: One polygenic score case](#link2)
-
-#### [3: Two polygenic scores](#link3)
-
-# Introduction<a name="link1"></a>
+## Citation
 
 The following script provides an example on how to run Gsens, a
 genetically informed sensitivity analysis, in R. Please cite the
@@ -34,637 +22,164 @@ implemented:
     associations. PLoS genetics, 17(6), e1009590.
     <https://doi.org/10.1371/journal.pgen.1009590>
 
-3.  Frach, L., Rijsdijk, F., Dudbridge, F. & Pingault, J. B. (in
-    preparation). Adjusting for genetic confounding using polygenic
-    scores within structural equation models.
+3.  Frach, L., Rijsdijk, F., Dudbridge, F., & Pingault, J. B. (2022,
+    November). Adjusting for Genetic Confounding Using Polygenic Scores
+    Within Structural Equation Models. In BEHAVIOR GENETICS (Vol. 52,
+    No. 6, pp. 359-359).
 
-In this tutorial, we illustrate the use of `Gsens` to estimate the role
-of genetic confounding in explaining the associations between maternal
-educational and three developmental outcomes in the offspring
+## Usage
 
--   educational achievement
--   BMI
--   ADHD
+We strongly recommend using the updated `gsensY()` function, since it
+has been optimised, e.g., by including raw data as input.<br> As for all
+lavaan models, we recommend *against* recommend using a correlation
+matrix as input but rather a covariance matrix if only summary data is
+available.<br> Lastly, we recommend standardising the polygenic score
+before regressing out potential batch effects (e.g., genotyping array,
+genetic PCs).<br> All phenotypic variables should **not** be
+standardised. However, if you want to get standardised estimates, the
+`lavaan::paramaterEstimates()` argument `std.all = TRUE` can be passed
+on to `gsensY()`.
 
-The following examples are based on the correlation matrix between
-polygenic scores and variables, as shown below (also available in the
-supplementary material of article 2). Study variables are residualised
-for sex and PCAs before computing the correlations.
+## Help
 
-**Correlations between study variables**
+Run `?gsensY()` in your command line to read the function and argument
+description.
 
-|                        | Maternal Education | GCSE    | BMI     | ADHD    | EDU PS  | BMI PS  | ADHD PS |
-|------------------------|--------------------|---------|---------|---------|---------|---------|---------|
-| **Maternal Education** | 1                  | 0.3975  | -0.0894 | -0.1240 | 0.2909  | -0.0839 | -0.0630 |
-| **GCSE**               | 0.3975             | 1       | -0.0894 | -0.3398 | 0.3462  | -0.0885 | -0.1103 |
-| **BMI**                | -0.0894            | -0.0894 | 1       | -0.0088 | -0.0269 | 0.2524  | 0.0441  |
-| **ADHD**               | -0.1240            | -0.3398 | -0.0088 | 1       | -0.0902 | 0.0820  | 0.1188  |
-| **EDU PS**             | 0.2909             | 0.3462  | -0.0269 | -0.0902 | 1       | -0.1856 | -0.1865 |
-| **BMI PS**             | -0.0839            | -0.0885 | 0.2524  | 0.0820  | -0.1856 | 1       | 0.1413  |
-| **ADHD PS**            | -0.0630            | -0.1103 | 0.0441  | 0.1188  | -0.1865 | 0.1413  | 1       |
+## Simulate population model with two exposures, one outcome and one genetic factor
 
-</br>
-
-# Installation of Gsens
-
-</br>
-
-To begin, please install and load the Gsens package with the code below:
+### Load packages for simulation
 
 ``` r
-# Install devtools
-install.packages("devtools")
-library(devtools)
+library(lavaan)
+library(stringr)
+library(simstandard)
+library(dplyr)
+```
 
-# Install Gsens
-install_github("JBPG/Gsens")
+### Simulation parameters for the population model
+
+``` r
+n = 1e4 # sample size
+b1 = 0.10 # effect of X1 on outcome
+b2 = 0.05 # effect of X2 on outcome
+a1 = 0.10 # effect of PGS_outcome on X1
+a2 = 0.08 # effect of PGS_outcome on X2
+c = 0.6 # effect of PGS_outcome on outcome
+pme = 0.80 # measurement error of G   
+
+h <- a1*b1 + a2*b2 + c # h^2 = heritability 
+```
+
+### Create the population model
+
+``` r
+# Simulate an underlying model, where the polygenic score (G) is a noisy measure of the true genetic factor (GF), which comes with measurement error (pme)
+
+population.modelGF = str_glue('  # use library stringr to pass the estimates to the model
+             #paths and loading
+             Y ~ {b1}*X1 + {b2}*X2 + {c}*GF  
+             X1 ~ {a1}*GF 
+             X2 ~ {a2}*GF
+             GF =~ sqrt(1-{pme})*G  
+          ')
+
+# Simulate data accordingly
+set.seed(123)
+myData <- sim_standardized(population.modelGF, n = n,
+                           latent = TRUE,
+                           errors = TRUE)
+```
+
+### Checks
+
+``` r
+dim(myData)
+```
+
+    ## [1] 10000     9
+
+``` r
+head(myData)
+```
+
+    ## # A tibble: 6 × 9
+    ##        Y     X1     X2      G     GF    e_Y   e_X1   e_X2     e_G
+    ##    <dbl>  <dbl>  <dbl>  <dbl>  <dbl>  <dbl>  <dbl>  <dbl>   <dbl>
+    ## 1 -0.304 -0.216  1.56   0.121  0.129 -0.438 -0.229  1.55   0.0631
+    ## 2  1.05   0.414 -1.30  -0.814 -0.446  1.34   0.459 -1.26  -0.614 
+    ## 3  0.671  0.302  0.355 -0.150 -0.556  0.957  0.358  0.399  0.0990
+    ## 4  1.06   0.448 -2.00   0.416 -0.473  1.40   0.495 -1.96   0.627 
+    ## 5 -1.29  -0.279 -1.07  -0.931 -0.625 -0.834 -0.217 -1.02  -0.652 
+    ## 6 -0.457  0.959  0.253 -0.457  1.25  -1.32   0.834  0.153 -1.02
+
+``` r
+# Create covariance matrix
+(cov1 = cov(myData)) #check all variances and covariances
+```
+
+    ##                Y           X1           X2             G            GF
+    ## Y     1.00280986  0.143847452  0.097657243  0.2610850728  0.6081840000
+    ## X1    0.14384745  0.990252901  0.004381535  0.0349070363  0.0844595533
+    ## X2    0.09765724  0.004381535  0.994164814  0.0436810085  0.0717134770
+    ## G     0.26108507  0.034907036  0.043681008  0.9832349333  0.4249479805
+    ## GF    0.60818400  0.084459553  0.071713477  0.4249479805  0.9951226518
+    ## e_Y   0.61863185 -0.006072647  0.004482762  0.0004415305 -0.0009212203
+    ## e_X1  0.08302905  0.981806946 -0.002789812 -0.0075877618 -0.0150527119
+    ## e_X2  0.04900252 -0.002375229  0.988427736  0.0096851700 -0.0078963351
+    ## e_G  -0.01090308 -0.002864424  0.011609767  0.7931924191 -0.0200843986
+    ##                e_Y          e_X1         e_X2           e_G
+    ## Y     0.6186318545  0.0830290519  0.049002523 -0.0109030805
+    ## X1   -0.0060726469  0.9818069457 -0.002375229 -0.0028644242
+    ## X2    0.0044827621 -0.0027898125  0.988427736  0.0116097666
+    ## G     0.0004415305 -0.0075877618  0.009685170  0.7931924191
+    ## GF   -0.0009212203 -0.0150527119 -0.007896335 -0.0200843986
+    ## e_Y   0.6195677132 -0.0059805249  0.004556460  0.0008535127
+    ## e_X1 -0.0059805249  0.9833122169 -0.001585596 -0.0008559844
+    ## e_X2  0.0045564598 -0.0015855955  0.989059443  0.0132165184
+    ## e_G   0.0008535127 -0.0008559844  0.013216518  0.8021744352
+
+### Create/load gsensY() function from [gsens.R](R/gsens.R)
+
+``` r
+# Install and load package
+devtools::install_github("LeonardFrach/Gsens")
 library(Gsens)
 ```
 
-Three functions are available:
-
-`gsensY()`: sensivity analysis based on one polygenic score for the
-outcome (Y)
-
-`gsensX()`: sensivity analysis based on one polygenic score for the
-exposure (X)
-
-`gsensXY()`: sensivity analysis based on two polygenic scores for X and
-Y
-
-As noted in the manuscript, `gsensY()` should be preferred in almost all
-situations.
-
-# One polygenic score case<a name="link2"></a>
-
-## Observed scenario
-
-In the following example, we will test the association between maternal
-years of education (X) and child GCSE scores (Y) after controlling for
-the best fitting polygenic score for years of education estimated in the
-child.
-
-To do so, we will use the “gsensY” function.
-
-For this, we need to specify 5 parameters:
-
--   **rxy** = the observed phenotypic correlation between exposure X and
-    outcome Y (here: correlation between maternal years of education and
-    child GCSE);
-
--   **rgx** = the observed correlation between phenotype X (maternal
-    years of education) and the observed polygenic score for education;
-
--   **rgy** = the observed correlation between phenotype Y (child GCSE)
-    and the observed polygenic score for education (adjusted for sex,
-    age, and principal components);
-
--   **n** = sample size;
-
--   **h2** = is the variance explained in the outcome, here by the
-    observed polygenic score (hence why h2 is **rgy^2**).
+### Run Gsens
 
 ``` r
-# gsensY(rxy = 0.3975,
-#        rgx = 0.2909,
-#        rgy = 0.3462,
-#        n = 3785,
-#        h2 = 0.3462^2)
-
-# old function
+# Using raw data
+gsensY(myData, h2 = h^2, exposures = c("X1", "X2"), pgs = "G", outcome = "Y") # this should correspond to the population model
 ```
 
-The output provides:
+    ## Using raw data as input.
 
--   **Adjusted Bxy** This is the standardized estimate of the
-    relationship between X and Y, adjusted for G (i.e. the residual
-    association between maternal education and child GCSE scores
-    adjusting for the offspring’s polygenic score). Note that this
-    estimate should be the same as a regression of Y on X adjusting for
-    the polygenic score in the dataset from which the correlations were
-    obtained.
-
--   **Genetic confounding** This is the estimate of genetic confounding.
-
--   **Total effect** This is the total effect, which should add up to
-    the observed initial association between X and Y when no constraints
-    are added.
-
-## Heritability scenario
-
-We will now implement the sensitivity analysis to examine genetic
-confounding under a scenario in which polygenic scores explain
-SNP-heritability in the outcome (here child GCSE scores).
-
-We will do this by adding a “h2” option which provides the chosen
-heritability estimate.
-
-Here, h2 = 0.31, which corresponds to the SNP-heritability of Y (child
-GCSE scores).
-
-**Heritability and genetic correlation under different scenarios**
-
-|                              | Education |
-|------------------------------|-----------|
-| Best-Fitting Polygenic score | 0.119     |
-| SNP-based scenario           | **0.31**  |
-| Twin scenario                | 0.63      |
+    ##                            est    se     z   pvalue ci.lower ci.upper
+    ## Adjusted Bx1y            0.095 0.015 6.383 1.74e-10    0.066    0.124
+    ## Adjusted Bx2y            0.036 0.015 2.349 1.88e-02    0.006    0.065
+    ## Mediation m1             0.008 0.001 5.256 1.47e-07    0.005    0.011
+    ## Mediation m2             0.004 0.001 3.432 5.99e-04    0.002    0.006
+    ## Total mediation          0.011 0.002 6.197 5.75e-10    0.008    0.015
+    ## Genetic confounding Bx1y 0.050 0.014 3.602 3.16e-04    0.023    0.077
+    ## Genetic confounding Bx2y 0.063 0.014 4.417 1.00e-05    0.035    0.091
+    ## Genetic overlap x1y      0.050 0.014 3.575 3.50e-04    0.023    0.078
+    ## Genetic overlap x2y      0.063 0.014 4.428 9.51e-06    0.035    0.091
 
 ``` r
-# gsensY(rxy = 0.3975,
-#        rgx = 0.2909,
-#        rgy = 0.3462,
-#        n = 3785,
-#        h2 = 0.31)
-
-# old function
+# Using covariance matrix + sample size
+gsensY(cov1, sample.nobs = n, h2 = h^2, exposures = c("X1", "X2"), pgs = "G", outcome = "Y")
 ```
 
-The results show that under a SNP heritability scenario, the effect of
-maternal education on child educational achievement is attenuated
-(B=0.176) relative to when controlling for observed polygenic scores
-(B=0.325).
+    ## Using covariance matrix as input.
 
-As noted in the manuscript, it is possible to fix the ratio k between
-rgy and rgx when a priori knowledge is available, for example the
-genetic relationship between the child and the mother.
-
-We do this below by specifying that rgx (i.e., the correlation between
-the child’s genetics with maternal education) is half of the correlation
-between the child’s genetics with their own educational achievement
-(i.e., the SNP heritability).
-
-We also specify that the rgy (i.e., the correlation between the child’s
-genetics with their own educational achievement) reflects SNP
-heritability (by taking the square root the heritability estimate to get
-the corresponding path value).
-
-``` r
-# gsensY(rxy = 0.3975,
-#        rgx = 0.5*sqrt(.31),
-#        rgy = sqrt(.31),
-#        n = 3785,
-#        h2 = 0.31)
-
-# old function
-```
-
-In this fixed solution, rgx and rgy and are therefore set to their value
-under the heritability scenario, rather than the observed value from the
-polygenic score.
-
-# Two polygenic scores <a name="link3"></a>
-
-When a polygenic score is available for each of X and Y, both can be
-modelled using gsensXY, for example, for maternal years of education and
-BMI. The gsensXY function takes a number of additional arguments:
-
--   **rxy** = as before, the observed phenotypic correlation between
-    exposure X and outcome Y (here: correlation between maternal years
-    of education and BMI);
-
--   **rg1x** = the correlation between the observed exposure X and the
-    polygenic score for X (maternal education) and the observed
-    polygenic score for education;
-
--   **rg2x** = the correlation between the observed exposure X (maternal
-    education) and the observed polygenic score for BMI;
-
--   **rg1y** = the correlations between the observed outcome Y (BMI) and
-    the observed polygenic score for education;
-
--   **rg2y** = the correlation between the observed outcome Y (BMI) and
-    the observed polygenic score for BMI;
-
--   **rg1g2** = the correlation between the observed polygenic scores
-    for education and BMI;
-
--   **h2.x** = the additive genetic variance explained in the observed
-    exposure X (maternal education) under the scenario of interest. When
-    calculating genetic confounding for with the two observed polygenic
-    score, then (**h2.x = rg1x^2**), otherwise h2.x is the chosen
-    heritability estimate for exposure X.
-
--   **h2.y** = the additive genetic variance explained in the observed
-    outcome Y (BMI) under the scenario of interest. When calculating
-    genetic confounding for with the two observed polygenic score, then
-    (**h2.y =rg2y^2**) otherwise h2.y is the chosen heritability
-    estimate for outcome Y.
-
--   **print = T** = enables the examination of model parameters
-
-## Observed polygenic scores
-
-``` r
-gsensXY(rxy = -0.0894,
-        rg1x = 0.2909,
-        rg2x = -0.0839,
-        rg1y = -0.0269,
-        rg2y = 0.2524,
-        rg1g2 = -0.1856,
-        n = 3663,
-        h2.x = 0.2909^2,
-        h2.y = 0.2524^2,
-        print = T)
-```
-
-    ## lavaan 0.6-10 ended normally after 70 iterations
-    ## 
-    ##   Estimator                                        GLS
-    ##   Optimization method                           NLMINB
-    ##   Number of model parameters                        12
-    ##                                                       
-    ##   Number of observations                          3663
-    ##                                                       
-    ## Model Test User Model:
-    ##                                                       
-    ##   Test statistic                                 0.000
-    ##   Degrees of freedom                                 0
-    ## 
-    ## Parameter Estimates:
-    ## 
-    ##   Standard errors                             Standard
-    ##   Information                                 Expected
-    ##   Information saturated (h1) model          Structured
-    ## 
-    ## Latent Variables:
-    ##                    Estimate  Std.Err  z-value  P(>|z|)
-    ##   GG1 =~                                              
-    ##     G1       (lg1)    1.000    0.059   16.903    0.000
-    ##   GG2 =~                                              
-    ##     G2       (lg2)    1.000    0.068   14.809    0.000
-    ## 
-    ## Regressions:
-    ##                    Estimate  Std.Err  z-value  P(>|z|)
-    ##   Y ~                                                 
-    ##     X        (bxy)   -0.081    0.017   -4.820    0.000
-    ##     GG1     (bg1y)    0.044    0.018    2.404    0.016
-    ##     GG2     (bg2y)    0.254    0.004   67.390    0.000
-    ##   X ~                                                 
-    ##     GG1     (bg1x)    0.285    0.003   89.869    0.000
-    ##     GG2     (bg2x)   -0.031    0.017   -1.805    0.071
-    ## 
-    ## Covariances:
-    ##                    Estimate  Std.Err  z-value  P(>|z|)
-    ##   GG1 ~~                                              
-    ##     GG2     (bg12)   -0.186    0.022   -8.408    0.000
-    ## 
-    ## Variances:
-    ##                    Estimate  Std.Err  z-value  P(>|z|)
-    ##     GG1               1.000                           
-    ##     GG2               1.000                           
-    ##    .Y         (vy)    0.930    0.023   39.974    0.000
-    ##    .X         (vx)    0.914    0.023   39.407    0.000
-    ##    .G1       (vg1)    0.000    0.111    0.000    1.000
-    ##    .G2       (vg2)    0.000    0.129    0.000    1.000
-    ## 
-    ## Defined Parameters:
-    ##                    Estimate  Std.Err  z-value  P(>|z|)
-    ##     conf             -0.009    0.006   -1.343    0.179
-    ##     total            -0.089    0.016   -5.431    0.000
-    ## 
-    ## Constraints:
-    ##                                                |Slack|
-    ##     bg1x+bg1g2*bg2x - (sqrt(0.08462281))         0.000
-    ##     bg2y+(bg2x+bg1g2*b1)*+12*1-((0.06370576))    0.000
-
-    ##                        est    se      z     pvalue ci.lower ci.upper
-    ## Adjusted Bxy        -0.081 0.017 -4.820 1.4336e-06   -0.114   -0.048
-    ## Genetic confounding -0.009 0.006 -1.343    0.17943   -0.021    0.004
-    ## Total effect        -0.089 0.016 -5.431 5.5933e-08   -0.122   -0.057
-
-</br>
-
-Similar to the one polygenic score case, the model is specified with
-paths between variables X and Y and polygenic scores for X (g1) and Y
-(g2). In some cases, parameters may take unlikely values. For example,
-the cross path bg1y flips from a negative to a positive value, which
-would imply that a higher polygenic score for education is linked to
-higher BMI. In such cases, constraints can be imposed on the the model
-in the following way.
-
-``` r
-gsensXY(rxy = -0.0894,
-        rg1x = 0.2909,
-        rg2x = -0.0839,
-        rg1y = -0.0269,
-        rg2y = 0.2524,
-        rg1g2 = -0.1856,
-        n = 3663,
-        h2.x = 0.2909^2,
-        h2.y = 0.2524^2,
-        print = T, 
-        constrain = 'lg1 < 1 \n lg2 < 1 \n  vg1 > 0  \n vg2 > 0 \n bg1y < 0 \n bg2x < 0 \n bxy < 0')
-```
-
-    ## Warning in lav_object_post_check(object): lavaan WARNING: some estimated ov
-    ## variances are negative
-
-    ## lavaan 0.6-10 ended normally after 195 iterations
-    ## 
-    ##   Estimator                                        GLS
-    ##   Optimization method                           NLMINB
-    ##   Number of model parameters                        12
-    ##   Number of inequality constraints                   7
-    ##                                                       
-    ##   Number of observations                          3663
-    ##                                                       
-    ## Model Test User Model:
-    ##                                                       
-    ##   Test statistic                                 6.665
-    ##   Degrees of freedom                                 0
-    ## 
-    ## Parameter Estimates:
-    ## 
-    ##   Standard errors                             Standard
-    ##   Information                                 Expected
-    ##   Information saturated (h1) model          Structured
-    ## 
-    ## Latent Variables:
-    ##                    Estimate  Std.Err  z-value  P(>|z|)
-    ##   GG1 =~                                              
-    ##     G1       (lg1)    0.998    0.011   87.425    0.000
-    ##   GG2 =~                                              
-    ##     G2       (lg2)    1.000                           
-    ## 
-    ## Regressions:
-    ##                    Estimate  Std.Err  z-value  P(>|z|)
-    ##   Y ~                                                 
-    ##     X        (bxy)   -0.069    0.016   -4.297    0.000
-    ##     GG1     (bg1y)   -0.000                           
-    ##     GG2     (bg2y)    0.247    0.002  141.325    0.000
-    ##   X ~                                                 
-    ##     GG1     (bg1x)    0.285    0.003   94.417    0.000
-    ##     GG2     (bg2x)   -0.031    0.016   -1.921    0.055
-    ## 
-    ## Covariances:
-    ##                    Estimate  Std.Err  z-value  P(>|z|)
-    ##   GG1 ~~                                              
-    ##     GG2     (bg12)   -0.186    0.016  -11.753    0.000
-    ## 
-    ## Variances:
-    ##                    Estimate  Std.Err  z-value  P(>|z|)
-    ##     GG1               1.000                           
-    ##     GG2               1.000                           
-    ##    .Y         (vy)    0.928    0.022   42.712    0.000
-    ##    .X         (vx)    0.914    0.021   42.778    0.000
-    ##    .G1       (vg1)   -0.000       NA                  
-    ##    .G2       (vg2)    0.000                           
-    ## 
-    ## Defined Parameters:
-    ##                    Estimate  Std.Err  z-value  P(>|z|)
-    ##     conf             -0.021    0.004   -5.328    0.000
-    ##     total            -0.089    0.016   -5.458    0.000
-    ## 
-    ## Constraints:
-    ##                                                |Slack|
-    ##     bg1x+bg1g2*bg2x - (sqrt(0.08462281))         0.000
-    ##     bg2y+(bg2x+bg1g2*b1)*+12*1-((0.06370576))    0.000
-    ##     1 - (lg1)                                    0.002
-    ##     1 - (lg2)                                    0.000
-    ##     vg1 - 0                                      0.000
-    ##     vg2 - 0                                      0.000
-    ##     0 - (bg1y)                                   0.000
-    ##     0 - (bg2x)                                   0.031
-    ##     0 - (bxy)                                    0.069
-
-    ##                        est    se      z     pvalue ci.lower ci.upper
-    ## Adjusted Bxy        -0.069 0.016 -4.297  1.734e-05   -0.100   -0.037
-    ## Genetic confounding -0.021 0.004 -5.328 9.9505e-08   -0.028   -0.013
-    ## Total effect        -0.089 0.016 -5.458 4.8159e-08   -0.122   -0.057
-
-Loadings for the latent part of the model are constrained to be less
-than 1 (lg1 \< 1 & lg2 \< 1) and residual variances to be positive (vg1
-\> 0 & vg2). Cross paths and the residual association are constrained to
-be negative, ie not flip sign (e.g. bg1y \< 0).
-
-Note that constraints need to be imposed cautiously on the model for two
-reasons:
-
-1.  To avoid nonsensical constraints. In another example, where the
-    polygenic scores are expected to be positively associated with both
-    X and Y keeping the \< 0 constraint on the cross path above would be
-    nonsensical. Instead > 0 should be used to keep the cross path
-    positive.
-
-2.  Constraining parameters can decrease standard error even when the
-    value of the parameter is not changed. That is, if lg1 is estimated
-    to 1, constraining it to 1 will not change the estimates but will
-    prevent the model from estimating a standard error for lg1 and can
-    reduce standard errors of other parameters including the estimates
-    of interest.
-
-All model parameters should be systematically checked after fitting a
-model, and before and after constraints are imposed. In addition to
-implausible parameters, so-called ‘heywood cases’ should be checked.
-Here, as the model is standardized, no parameter should be above 1 or
-below -1. For example, a heritability parameter above 1 would correspond
-to a heritability above 100%.
-
-## Check with one polygenic score
-
-Findings for the constrained vs the unconstrained model diverge. We can
-use gsensY to adjust for the outcome-related polygenic score only, here
-BMI. Note that in theory, if the polygenic score for the outcome was
-perfect, adjusting for that polygenic score would be sufficient as it
-would capture shared genetic influences between X and Y. Findings from
-adjusting for the BMI polygenic score only converge with the constrained
-version of the two polygenic score approach.
-
-``` r
-# gsensY(rxy = -0.0894,
-#        rgx = -0.0839,
-#        rgy = 0.2524,
-#        n = 3663,
-#        h2 = 0.2524^2)
-
-# old function
-```
-
-## Heritability scenario
-
-``` r
-gsensXY(rxy = -0.0894,
-        rg1x = 0.2909,
-        rg2x = -0.0839,
-        rg1y = -0.0269,
-        rg2y = 0.2524,
-        rg1g2 = -0.1856,
-        n = 3785,
-        h2.x = 0.25*0.31,
-        h2.y = 0.186,
-        constrain = 'lg1 < 1 \n lg2 < 1 \n  vg1 > 0  \n vg2 > 0 \n bg1y < 0 \n bg2x < 0 \n bxy < 0',
-        print = T)
-```
-
-    ## lavaan 0.6-10 ended normally after 159 iterations
-    ## 
-    ##   Estimator                                        GLS
-    ##   Optimization method                           NLMINB
-    ##   Number of model parameters                        12
-    ##   Number of inequality constraints                   7
-    ##                                                       
-    ##   Number of observations                          3785
-    ##                                                       
-    ## Model Test User Model:
-    ##                                                       
-    ##   Test statistic                                41.768
-    ##   Degrees of freedom                                 0
-    ## 
-    ## Parameter Estimates:
-    ## 
-    ##   Standard errors                             Standard
-    ##   Information                                 Expected
-    ##   Information saturated (h1) model          Structured
-    ## 
-    ## Latent Variables:
-    ##                    Estimate  Std.Err  z-value  P(>|z|)
-    ##   GG1 =~                                              
-    ##     G1       (lg1)    0.989    0.011   87.840    0.000
-    ##   GG2 =~                                              
-    ##     G2       (lg2)    0.681    0.036   19.003    0.000
-    ## 
-    ## Regressions:
-    ##                    Estimate  Std.Err  z-value  P(>|z|)
-    ##   Y ~                                                 
-    ##     X        (bxy)   -0.043    0.017   -2.464    0.014
-    ##     GG1     (bg1y)   -0.000                           
-    ##     GG2     (bg2y)    0.426    0.002  213.726    0.000
-    ##   X ~                                                 
-    ##     GG1     (bg1x)    0.264    0.006   46.959    0.000
-    ##     GG2     (bg2x)   -0.063    0.024   -2.686    0.007
-    ## 
-    ## Covariances:
-    ##                    Estimate  Std.Err  z-value  P(>|z|)
-    ##   GG1 ~~                                              
-    ##     GG2     (bg12)   -0.224    0.023   -9.634    0.000
-    ## 
-    ## Variances:
-    ##                    Estimate  Std.Err  z-value  P(>|z|)
-    ##     GG1               1.000                           
-    ##     GG2               1.000                           
-    ##    .Y         (vy)    0.826    0.023   36.388    0.000
-    ##    .X         (vx)    0.911    0.021   43.139    0.000
-    ##    .G1       (vg1)    0.000       NA                  
-    ##    .G2       (vg2)    0.537    0.046   11.780    0.000
-    ## 
-    ## Defined Parameters:
-    ##                    Estimate  Std.Err  z-value  P(>|z|)
-    ##     conf             -0.052    0.010   -5.193    0.000
-    ##     total            -0.095    0.016   -5.832    0.000
-    ## 
-    ## Constraints:
-    ##                                                |Slack|
-    ##     bg1x+bg1g2*bg2x - (sqrt(0.0775))             0.000
-    ##     bg2y+(bg2x+bg1g2*bg1x)*bxy+12*1-((0.186))    0.000
-    ##     1 - (lg1)                                    0.011
-    ##     1 - (lg2)                                    0.319
-    ##     vg1 - 0                                      0.000
-    ##     vg2 - 0                                      0.537
-    ##     0 - (bg1y)                                   0.000
-    ##     0 - (bg2x)                                   0.063
-    ##     0 - (bxy)                                    0.043
-
-    ##                        est    se      z     pvalue ci.lower ci.upper
-    ## Adjusted Bxy        -0.043 0.017 -2.464   0.013754   -0.077   -0.009
-    ## Genetic confounding -0.052 0.010 -5.193 2.0673e-07   -0.072   -0.033
-    ## Total effect        -0.095 0.016 -5.832  5.484e-09   -0.127   -0.063
-
-Heritability scenarios of interest can be modelled with two polygenic
-scores by replacing h2.x and h2.y by the chosen values, here
-SNP-heritability estimates. Not that in h2.x=0.25x0.31, the factor 0.25
-corresponds to the genetic relatedness between child and mother
-(i.e. sqrt(h2.x) is computed in the model leading to the value of the
-path equal to 0.5xsqrt(0.31).)
-
-Note that in the model above corresponding to SNP-heritability, the
-genetic correlation between the latent genetic factor is estimated based
-on the observed polygenic scores and the heritability estimates to be
--0.224. We have an external estimate of -0.279 based on LD score
-regression (See Table 1). We can use a fixed solution to use this value
-instead of the estimated value:
-
-``` r
-gsensXY(rxy = -0.0894,
-        rg1x = sqrt(0.25*0.31),               
-        rg2y = sqrt(0.186), 
-        rg1y = sqrt(0.25*0.31)*-0.0269/0.2909, 
-        rg2x = sqrt(0.186)*-0.0839/0.2524,
-        rg1g2 = -0.279,
-        n = 3663, 
-        h2.x = 0.25*0.31, 
-        h2.y = 0.186,
-        print = T)
-```
-
-    ## Warning in lav_object_post_check(object): lavaan WARNING: some estimated ov
-    ## variances are negative
-
-    ## lavaan 0.6-10 ended normally after 87 iterations
-    ## 
-    ##   Estimator                                        GLS
-    ##   Optimization method                           NLMINB
-    ##   Number of model parameters                        12
-    ##                                                       
-    ##   Number of observations                          3663
-    ##                                                       
-    ## Model Test User Model:
-    ##                                                       
-    ##   Test statistic                                 0.000
-    ##   Degrees of freedom                                 0
-    ## 
-    ## Parameter Estimates:
-    ## 
-    ##   Standard errors                             Standard
-    ##   Information                                 Expected
-    ##   Information saturated (h1) model          Structured
-    ## 
-    ## Latent Variables:
-    ##                    Estimate  Std.Err  z-value  P(>|z|)
-    ##   GG1 =~                                              
-    ##     G1       (lg1)    1.000    0.062   16.229    0.000
-    ##   GG2 =~                                              
-    ##     G2       (lg2)    1.000    0.042   23.965    0.000
-    ## 
-    ## Regressions:
-    ##                    Estimate  Std.Err  z-value  P(>|z|)
-    ##   Y ~                                                 
-    ##     X        (bxy)   -0.057    0.016   -3.518    0.000
-    ##     GG1     (bg1y)    0.117    0.021    5.707    0.000
-    ##     GG2     (bg2y)    0.456    0.007   61.612    0.000
-    ##   X ~                                                 
-    ##     GG1     (bg1x)    0.259    0.005   50.452    0.000
-    ##     GG2     (bg2x)   -0.071    0.019   -3.769    0.000
-    ## 
-    ## Covariances:
-    ##                    Estimate  Std.Err  z-value  P(>|z|)
-    ##   GG1 ~~                                              
-    ##     GG2     (bg12)   -0.279    0.024  -11.759    0.000
-    ## 
-    ## Variances:
-    ##                    Estimate  Std.Err  z-value  P(>|z|)
-    ##     GG1               1.000                           
-    ##     GG2               1.000                           
-    ##    .Y         (vy)    0.801    0.024   33.160    0.000
-    ##    .X         (vx)    0.918    0.023   40.218    0.000
-    ##    .G1       (vg1)   -0.000    0.116   -0.000    1.000
-    ##    .G2       (vg2)    0.000    0.073    0.000    1.000
-    ## 
-    ## Defined Parameters:
-    ##                    Estimate  Std.Err  z-value  P(>|z|)
-    ##     conf             -0.033    0.009   -3.615    0.000
-    ##     total            -0.089    0.016   -5.426    0.000
-    ## 
-    ## Constraints:
-    ##                                                |Slack|
-    ##     bg1x+bg1g2*bg2x - (sqrt(0.0775))             0.000
-    ##     bg2y+(bg2x+bg1g2*bg1x)*bxy+12*1-((0.186))    0.000
-
-    ##                        est    se      z     pvalue ci.lower ci.upper
-    ## Adjusted Bxy        -0.057 0.016 -3.518  0.0004345   -0.088   -0.025
-    ## Genetic confounding -0.033 0.009 -3.615 0.00030046   -0.050   -0.015
-    ## Total effect        -0.089 0.016 -5.426 5.7666e-08   -0.122   -0.057
-
-Note that rg1y and rg2x are computed by multiplying the heritabilities
-under the chosen scenario by a ratio comparable to k in the one
-polygenic score case.
+    ##                            est    se     z   pvalue ci.lower ci.upper
+    ## Adjusted Bx1y            0.095 0.015 6.383 1.74e-10    0.066    0.124
+    ## Adjusted Bx2y            0.036 0.015 2.349 1.88e-02    0.006    0.065
+    ## Mediation m1             0.008 0.001 5.256 1.47e-07    0.005    0.011
+    ## Mediation m2             0.004 0.001 3.432 5.99e-04    0.002    0.006
+    ## Total mediation          0.011 0.002 6.197 5.75e-10    0.008    0.015
+    ## Genetic confounding Bx1y 0.050 0.014 3.602 3.16e-04    0.023    0.077
+    ## Genetic confounding Bx2y 0.063 0.014 4.417 1.00e-05    0.035    0.091
+    ## Genetic overlap x1y      0.050 0.014 3.575 3.50e-04    0.023    0.078
+    ## Genetic overlap x2y      0.063 0.014 4.428 9.51e-06    0.035    0.091
