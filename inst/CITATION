@@ -1,0 +1,34 @@
+citHeader("To cite Gsens in publications use:")
+
+citEntry(entry = "Article",
+  title        = "Genetic sensitivity analysis: Adjusting for genetic confounding in epidemiological associations.",
+  author       = personList(as.person("Jean-Baptiste Pingault"),
+                   as.person("Frühling Rijsdijk"), as.person("Tabea Schoeler"), as.person("Shing Wan Choi"), as.person("Saskia Selzam"), as.person("Eva Krapohl"), as.person("Paul F O'Reilly"), as.person("Frank Dudbridge")),
+  journal      = "PLoS genetics",
+  year         = "2021",
+  volume       = "17",
+  number       = "6",
+  pages        = "e1009590",
+  url          = "https://doi.org/10.1371/journal.pgen.1009590",
+
+  textVersion  =
+"Pingault, J. B., Rijsdijk, F., Schoeler, T., Choi, S. W., Selzam, S., Krapohl, E., ... & Dudbridge, F. (2021). Genetic sensitivity analysis: Adjusting for genetic confounding in epidemiological associations. PLoS genetics, 17(6), e1009590. https://doi.org/10.1371/journal.pgen.1009590"
+
+)
+
+citHeader("as well as:")
+
+citEntry(entry = "Conference Paper",
+  title        = "Adjusting for Genetic Confounding Using Polygenic Scores Within Structural Equation Models",
+  author       = personList(as.person("Leonard Frach"),
+                   as.person("Frühling Rijsdijk"), as.person("Frank Dudbridge"), as.person("Jean-Baptiste Pingault")),
+  journal      = "BEHAVIOR GENETICS",
+  year         = "2022",
+  volume       = "52",
+  number       = "6",
+  pages        = "359--359",
+
+  textVersion  =
+"Frach, L., Rijsdijk, F., Dudbridge, F, & Pingault, J.-B. (2022). Adjusting for Genetic Confounding Using Polygenic Scores Within Structural Equation Models. In BEHAVIOR GENETICS (Vol. 52, No. 6, pp. 359-359)."
+
+)
