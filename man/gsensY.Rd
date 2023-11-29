@@ -4,60 +4,42 @@
 \alias{gsensY}
 \title{Adjusting for genetic confounding using PGS for the outcome}
 \usage{
-gsensY(
-  data,
-  sample.nobs = NULL,
-  h2,
-  estimator = "GLS",
-  se = "standard",
-  boot.ci.type = "perc",
-  fmi = F,
-  print = "summary",
-  ...
-)
+gsensY(data, h2, exposures, outcome, pgs, print = "all", ...)
 }
 \arguments{
-\item{data}{Either a data frame of raw data or a covariance/correlation matrix. 
-Must contain the variables G (PGS for Y), Y (outcome) and X (exposure) or instead X1, X2, ..., Xi if multiple exposures are used.
-If data is a cov/cor matrix, the additional argument sample.nobs is required.}
-
-\item{sample.nobs}{Optional. Number of observations used for the data.
-Only necessary if input is a covariance or correlation matrix.}
+\item{data}{Either a data frame of raw data or a covariance/correlation matrix, although the latter one is currently not recommended.
+If 'data' is a cov/cor matrix, the additional lavaan argument 'sample.nobs' (number of observations) is required.}
 
 \item{h2}{Heritability estimate of the outcome (Y).
 Can be chosen to be any external value, e.g. SNP- or twin-heritability estimates.}
 
-\item{estimator}{Optional. Type of estimator used.
-Can be any estimator for continuous data implemented in lavaan, e.g. "ML" or "GLS" (default = "GLS").}
+\item{exposures}{Vector of variable name(s) of the exposure(s). 
+Example: exposures = c("x1", "x2")}
 
-\item{se}{Optional. Method to compute standard errors, can be any method implemented in lavaan,
-e.g. "robust.sem" or "bootstrap". If se = "bootstrap", bootstrapping *cannot* be used for estimation of confidence intervals,
-which is however strongly recommended (default = "standard").}
+\item{outcome}{Name of the outcome variable.}
 
-\item{boot.ci.type}{Bootstrapping method used to compute the confidence intervals,
-can be any method implemented in lavaan. Default is "perc".}
+\item{pgs}{Name of the polygenic score variable (pgs corresponding to the outcome).}
 
-\item{fmi}{Optional. If full-information maximum likelihood estimation is desired (estimator = "ML", missing "ML"),
-and fmi = TRUE, missingness is reported (default = FALSE).}
+\item{print}{Optional. Can be one of c("exposure", "mediation", "confounding", "overlap", or "all").
+Defaults to `print = "all"`, which will print all parameter estimates).}
 
-\item{print}{Optional. Can be one of c("exposure", "mediation", "confounding", "overlap", "all" or "summary").
-If print = "all", all relevant parameters will be printed.
-If print = "summary", the lavaan output of the summary() function will be printed (default = "summary").}
-
-\item{...}{Additional arguments passed from lavaan, including 'bootstrap' (number of bootstraps for CIs, default = 1000)
-and 'constraints' (constraints on the model).}
+\item{...}{Additional arguments passed from lavaan, including 'se' (estimation method for the standard errors), 
+'estimator' (estimator used for model, default is ML), 'bootstrap' (number of bootstraps for CIs, default = 1000),
+'sample.nobs' (Number of observations for estimation using summary data, not recommended), and more.
+See the lavaan documentation for details, e.g., ?lavaan::lavaan(), ?lavaan::lavOptions() or ?lavaan::parameterEstimates()}
 }
 \value{
-Estimates for the adjusted exposure-outcome associations, exposure-mediated genetic effects,
-genetic confounding and genetic overlap.
+The Gsens model output will be returned as a lavaan object. For example, the summary() or lavaan::parameterEstimates() functions can be used for more detailed outputs.
 }
 \description{
 Adjusting for genetic confounding in exposure-outcome associations using the polygenic score for the outcome.
 This is the recommended function for most scenarios, and the only function that has been extended to the multiple exposure case.
 }
 \examples{
-df <- data.frame(G, X1, X2, Y) 
-gsensY(df, h2 = 0.5);
+\dontrun{
+df <- data.frame(X1, X2, X3, Y, PGS_outcome) 
+mod_out <- gsensY(df, h2 = 0.5, exposures = c("X1", "X2", "X3"), outcome = "Y", pgs = "PGS_outcome")
+}
 }
 \references{
 Frach, L., Rijsdijk, F., Dudbridge, F. & Pingault, J. B. (in preparation).

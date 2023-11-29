@@ -15,18 +15,19 @@ sapply(load.lib, require, character = TRUE) # Load libraries
 #' Example: exposures = c("x1", "x2")
 #' @param outcome Name of the outcome variable.
 #' @param pgs Name of the polygenic score variable (pgs corresponding to the outcome).
-#' @param print Optional. Can be one of c("exposure", "mediation", "confounding", "overlap", or "summary").
-#' If print = "summary", the lavaan output of the summary() function will be printed (default = NULL; gsensY will return all parameter estimates).
+#' @param print Optional. Can be one of c("exposure", "mediation", "confounding", "overlap", or "all").
+#' Defaults to `print = "all"`, which will print all parameter estimates).
 #' @param ... Additional arguments passed from lavaan, including 'se' (estimation method for the standard errors), 
 #' 'estimator' (estimator used for model, default is ML), 'bootstrap' (number of bootstraps for CIs, default = 1000),
 #' 'sample.nobs' (Number of observations for estimation using summary data, not recommended), and more.
 #' See the lavaan documentation for details, e.g., ?lavaan::lavaan(), ?lavaan::lavOptions() or ?lavaan::parameterEstimates()
-#' @return Estimates for the adjusted exposure-outcome associations, exposure-mediated genetic effects,
-#' genetic confounding and genetic overlap.
+#' @return The Gsens model output will be returned as a lavaan object. For example, the summary() or lavaan::parameterEstimates() functions can be used for more detailed outputs.
 
 #' @examples
+#' \dontrun{
 #' df <- data.frame(X1, X2, X3, Y, PGS_outcome) 
-#' gsensY(df, h2 = 0.5, exposures = c("X1", "X2", "X3"), outcome = "Y", pgs = "PGS_outcome");
+#' mod_out <- gsensY(df, h2 = 0.5, exposures = c("X1", "X2", "X3"), outcome = "Y", pgs = "PGS_outcome")
+#' }
 
 #' @author Leonard Frach & Jean-Baptiste Pingault
 #' @export
@@ -255,9 +256,6 @@ gsensY = function(data,
     
     results$pvalue = as.numeric(formatC(2*pnorm(-abs(results$z)), digits = 3))
     
-    gsens <- results
-    #return(gsens)
-    
     ## Print results
     if (print == "summary") {print(summary(fit_mod))}
     if (print == "exposure") {print(results[1:NX, ])} 
@@ -265,6 +263,9 @@ gsensY = function(data,
     if (print == "confounding") {print(results[(3*NX):(4*NX - 1), ])} 
     if (print == "overlap") {print(results[(4*NX):(5*NX - 1), ])} 
     if (print == "all") {print(results)} 
+    
+    #class(fit_mod) <- "Gsens" # not useful
+    return(fit_mod) # model output can be used, e.g. using summary() function 
     
 }  
 
