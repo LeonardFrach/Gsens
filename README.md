@@ -1,7 +1,7 @@
 Simple simulated data set and example
 ================
 Leo Frach
-2023-11-28
+2023-12-21
 
 ## Citation
 
@@ -31,14 +31,14 @@ implemented:
 
 We strongly recommend using the updated `gsensY()` function, since it
 has been optimised, e.g., by including raw data as input.<br> As for all
-lavaan models, we recommend *against* recommend using a correlation
+lavaan models, we recommend *against* using a correlation
 matrix as input but rather a covariance matrix if only summary data is
 available.<br> Lastly, we recommend standardising the polygenic score
 before regressing out potential batch effects (e.g., genotyping array,
 genetic PCs).<br> All phenotypic variables should **not** be
 standardised. However, if you want to get standardised estimates, the
-`lavaan::paramaterEstimates()` argument `std.all = TRUE` can be passed
-on to `gsensY()`.
+additional `lavaan` argument `std.all = TRUE` can be passed
+on to `gsensY()`, or output can be customized using the `parameterEstimates()` function with the argument `standardized = TRUE` on the output of the `gsensY()` function.
 
 ## Help
 

@@ -15,18 +15,16 @@ sapply(load.lib, require, character = TRUE) # Load libraries
 #' Example: exposures = c("x1", "x2")
 #' @param outcome Name of the outcome variable.
 #' @param pgs Name of the polygenic score variable (pgs corresponding to the outcome).
-#' @param print Optional. Can be one of c("exposure", "mediation", "confounding", "overlap", or "all").
-#' Defaults to `print = "all"`, which will print all parameter estimates).
 #' @param ... Additional arguments passed from lavaan, including 'se' (estimation method for the standard errors), 
 #' 'estimator' (estimator used for model, default is ML), 'bootstrap' (number of bootstraps for CIs, default = 1000),
 #' 'sample.nobs' (Number of observations for estimation using summary data, not recommended), and more.
-#' See the lavaan documentation for details, e.g., ?lavaan::lavaan(), ?lavaan::lavOptions() or ?lavaan::parameterEstimates()
-#' @return The Gsens model output will be returned as a lavaan object. For example, the summary() or lavaan::parameterEstimates() functions can be used for more detailed outputs.
+#' See the lavaan documentation for details, e.g., ?lavaan::lavaan() or ?lavaan::lavOptions() 
+#' @return The Gsens model output will be returned as a lavaan object. For example, the summary() or lavaan::parameterEstimates() functions can be used for more detailed outputs, e.g. for standardized estimates.
 
 #' @examples
 #' \dontrun{
 #' df <- data.frame(X1, X2, X3, Y, PGS_outcome) 
-#' mod_out <- gsensY(df, h2 = 0.5, exposures = c("X1", "X2", "X3"), outcome = "Y", pgs = "PGS_outcome")
+#' gsens_out <- gsensY(df, h2 = 0.5, exposures = c("X1", "X2", "X3"), outcome = "Y", pgs = "PGS_outcome")
 #' }
 
 #' @author Leonard Frach & Jean-Baptiste Pingault
@@ -47,31 +45,6 @@ gsensY = function(data,
                   outcome,
                   pgs,
                   print = "all", ...) {
-    
-    # additional forwarded arguments
-    Args <- NULL
-    Args <- list(...)
-    Args <- as.data.frame(Args)
-
-    args_lav <- NULL
-    args_est <- NULL
-    
-    if (!is.null(Args)) {
-        args_lav <- Args %>%
-            purrr::keep(names(.) %in% names(formals(lavaan::lavaan)) | names(.) %in%
-                            names(lavaan::lavOptions()))
-                            # c("missing", "se",
-                            #   "bootstrap", "parallel", "ncpus", "test", "estimator"))
-        
-        args_lav <- as.data.frame(args_lav)
-
-        args_est <- Args %>% #
-            purrr:::keep(names(.) %in% names(formals(lavaan::parameterEstimates))) %>%
-            purrr::discard(names(.) == "se")
-
-        args_est <- as.data.frame(args_est)
-
-    }
     
 
     if (dim(data)[1] != dim(data)[2]) {
@@ -171,53 +144,13 @@ gsensY = function(data,
     
     ## model estimation options
     
-    opt <- lavaan::lavOptions()
-    opt2 <- c(formals(lavaan), opt)
-
-    if (!is.null(args_lav)) {
-        ok.names <- names(opt2)
-        dot.names <- names(args_lav)
-        wrong.idx <- which(!dot.names %in% ok.names)
-        
-        if (!purrr::is_empty(wrong.idx)) {
-            message("Gsens Warning: Check dots.")
-        }
-        
-        opt <- modifyList(opt, args_lav)
-    }
-    
-    opt_lav <- list(model = model, data = data, sample.cov = cov)
-    opt_all <- c(opt_lav, opt)
-
-    
     # run model
-    fit_mod <- do.call('lavaan', args = opt_all)
+    fit_mod <- lavaan(model = model, data = data, sample.cov = cov, ...)
     
     
     ## parameter estimates options
-    
-    opt <- formals(parameterEstimates)
-    
-    if (is.null(args_est)) {
-        pe <- parameterEstimates(fit_mod)
-        
-    } else {
-        ok.names <- names(opt)
-        dot.names <- names(args_est)
-        wrong.idx <- which(!dot.names %in% ok.names)
-        
-        if (!purrr::is_empty(wrong.idx)) {
-            message("Gsens Warning: Check dots.")
-        }
-        
-        opt <- modifyList(opt, args_est)
-        
-        opt_pe <- list(fit_mod)
-        opt_all <- c(opt_pe, opt)
-        
-        pe <- do.call('parameterEstimates', args = opt_all)
-        
-    }
+    pe <- parameterEstimates(fit_mod)
+
     
     results <- data.frame(rbind(
         pe[pe$label %in% labelsb,],
@@ -257,14 +190,8 @@ gsensY = function(data,
     results$pvalue = as.numeric(formatC(2*pnorm(-abs(results$z)), digits = 3))
     
     ## Print results
-    if (print == "summary") {print(summary(fit_mod))}
-    if (print == "exposure") {print(results[1:NX, ])} 
-    if (print == "mediation") {print(results[(NX + 1):(3*NX - 1), ])} 
-    if (print == "confounding") {print(results[(3*NX):(4*NX - 1), ])} 
-    if (print == "overlap") {print(results[(4*NX):(5*NX - 1), ])} 
-    if (print == "all") {print(results)} 
+    print(results)
     
-    #class(fit_mod) <- "Gsens" # not useful
     return(fit_mod) # model output can be used, e.g. using summary() function 
     
 }  
