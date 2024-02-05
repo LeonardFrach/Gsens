@@ -52,152 +52,152 @@ gsensY = function(data,
                   print = "all", ...) {
 
 
-    if (dim(data)[1] != dim(data)[2]) {
-        message("Using raw data as input.")
+  if (dim(data)[1] != dim(data)[2]) {
+    message("Using raw data as input.")
 
-        data <- as.data.frame(data)
+    data <- as.data.frame(data)
 
-        # use only relevant variables
-        data <- data %>%
-            dplyr::select(all_of(c(exposures, outcome, pgs)))
+    # use only relevant variables
+    data <- data %>%
+      dplyr::select(all_of(c(exposures, outcome, pgs)))
 
-        # number of exposure
-        NX <- length(exposures)
+    # number of exposure
+    NX <- length(exposures)
 
-        names(data)[c((NX + 1):(NX + 2))] <- c("Y","G")
+    names(data)[c((NX + 1):(NX + 2))] <- c("Y","G")
 
-        # no correlation matrix
-        cov <- NULL
+    # no correlation matrix
+    cov <- NULL
 
-    } else if (dim(data)[1] == dim(data)[2] &
-               all(diag(data) == 1)) {
-        message("Using correlation matrix as input. Warning: standard errors might be biased downwards when using correlation matrices in lavaan.")
+  } else if (dim(data)[1] == dim(data)[2] &
+             all(diag(data) == 1)) {
+    message("Using correlation matrix as input. Warning: standard errors might be biased downwards when using correlation matrices in lavaan.")
 
-        cov <- as.matrix(data)
-        data <- as.data.frame(data)
+    cov <- as.matrix(data)
+    data <- as.data.frame(data)
 
-    } else if (dim(data)[1] == dim(data)[2] &
-               !all(diag(data) == 1)) {
-        message("Using covariance matrix as input.")
+  } else if (dim(data)[1] == dim(data)[2] &
+             !all(diag(data) == 1)) {
+    message("Using covariance matrix as input.")
 
-        cov <- as.matrix(data)
-    }
-
-
-    # if correlation matrix is used
-    if (!is.null(cov)) {
-        data <- NULL
-        # N of exposures
-        NX <- length(exposures)
-        # select relevant variables
-
-        cov <- cov %>% as.data.frame() %>%
-            dplyr::select(all_of(c(exposures, outcome, pgs))) %>%
-            dplyr::filter(rownames(.) %in% colnames(.))
-
-        colnames(cov)[c((NX + 1):(NX + 2))] <- c("Y", "G")
-
-        cov <- cov[c(exposures, outcome, pgs), ]
-        cov <- as.matrix(cov)
-
-    }
-
-    # create covariance structure and label for the model
-
-    covstruc <- outer(exposures,
-                      exposures,
-                      function(x, y) paste(x, "~~", y))
-    labelsa = paste0("a", 1:NX)
-    labelsb = paste0("b", 1:NX)
-    labelsm = paste0("m", 1:NX)
-    labels_gc = paste0("gc_", labelsb)
-    labels_go = paste0("go_", labelsb)
+    cov <- as.matrix(data)
+  }
 
 
-    ### main lavaan model ###
+  # if correlation matrix is used
+  if (!is.null(cov)) {
+    data <- NULL
+    # N of exposures
+    NX <- length(exposures)
+    # select relevant variables
 
-    gC <- numeric()
+    cov <- cov %>% as.data.frame() %>%
+      dplyr::select(all_of(c(exposures, outcome, pgs))) %>%
+      dplyr::filter(rownames(.) %in% colnames(.))
 
+    colnames(cov)[c((NX + 1):(NX + 2))] <- c("Y", "G")
 
-    ## model specification
+    cov <- cov[c(exposures, outcome, pgs), ]
+    cov <- as.matrix(cov)
 
-    model = c(
-        paste("Y ~", paste0(c(labelsb,"c"),"*", c(exposures,"GG"), collapse = " + ")),    # Y depends on X and true polygenic score
-        paste(exposures,"~", paste0(labelsa,"*","GG")),                                   # X1-Xi depend on true polygenic score
-        covstruc[lower.tri(covstruc, diag = TRUE)],                                    # covariance structure
-        "GG =~ l*G" ,
-        "GG ~~ 1*GG",
-        "G ~~ me*G", # rename me here, because it is not measurement error here
-        "Y ~~ Y",
-        # total mediation effect
-        paste("m :=", paste0(labelsa,"*",labelsb, collapse = " + ")),
-        paste0(labelsm, " := ", labelsa,"*",labelsb),                                  # specific mediation pathways for each G->Xi->Y
-        # heritability constraints
-        paste0("h := ","t(matrix(","c(",
-               paste0(labelsa, collapse = ", "),")))"," %*% ","matrix(c(",
-               paste0(labelsb, collapse = ", "),"))"," + c"),
-        paste('h == sqrt(', h2,')'),
-        for (i in 1:NX) {                                                              # genetic confounding for each Xi->Y association
-            gC <- c(gC, paste0(labels_gc[i], " := ",
-                               paste0(labelsa[i],"*", labelsb[-i],"*", labelsa[-i],
-                                      collapse = " + "), " + ", labelsa[i], "*c"))
-        },
-        gC,
-        paste0(labels_go, " := ", labelsa,"*", labelsa,"*", labelsb, " + ", labels_gc) # genetic overlap for each Xi->Y association
-    )
+  }
+
+  # create covariance structure and label for the model
+
+  covstruc <- outer(exposures,
+                    exposures,
+                    function(x, y) paste(x, "~~", y))
+  labelsa = paste0("a", 1:NX)
+  labelsb = paste0("b", 1:NX)
+  labelsm = paste0("m", 1:NX)
+  labels_gc = paste0("gc_", labelsb)
+  labels_go = paste0("go_", labelsb)
 
 
-    ## model estimation options
+  ### main lavaan model ###
 
-    # run model
-    fit_mod <- lavaan(model = model, data = data, sample.cov = cov, ...)
-
-
-    ## parameter estimates options
-    pe <- parameterEstimates(fit_mod)
+  gC <- numeric()
 
 
-    results <- data.frame(rbind(
-        pe[pe$label %in% labelsb,],
-        pe[pe$label %in% labelsm,],
-        pe[pe$label %in% "m",],
-        pe[pe$label %in% labels_gc,],
-        pe[pe$label %in% labels_go,]
-    ))[, c(5:dim(pe)[2])]
+  ## model specification
 
-    results <- results %>%
-        mutate_if(is.numeric, round, 3) # round all numeric variables
+  model = c(
+    paste("Y ~", paste0(c(labelsb,"c"),"*", c(exposures,"GG"), collapse = " + ")),    # Y depends on X and true polygenic score
+    paste(exposures,"~", paste0(labelsa,"*","GG")),                                   # X1-Xi depend on true polygenic score
+    covstruc[lower.tri(covstruc, diag = TRUE)],                                    # covariance structure
+    "GG =~ l*G" ,
+    "GG ~~ 1*GG",
+    "G ~~ me*G", # rename me here, because it is not measurement error here
+    "Y ~~ Y",
+    # total mediation effect
+    paste("m :=", paste0(labelsa,"*",labelsb, collapse = " + ")),
+    paste0(labelsm, " := ", labelsa,"*",labelsb),                                  # specific mediation pathways for each G->Xi->Y
+    # heritability constraints
+    paste0("h := ","t(matrix(","c(",
+           paste0(labelsa, collapse = ", "),")))"," %*% ","matrix(c(",
+           paste0(labelsb, collapse = ", "),"))"," + c"),
+    paste('h == sqrt(', h2,')'),
+    for (i in 1:NX) {                                                              # genetic confounding for each Xi->Y association
+      gC <- c(gC, paste0(labels_gc[i], " := ",
+                         paste0(labelsa[i],"*", labelsb[-i],"*", labelsa[-i],
+                                collapse = " + "), " + ", labelsa[i], "*c"))
+    },
+    gC,
+    paste0(labels_go, " := ", labelsa,"*", labelsa,"*", labelsb, " + ", labels_gc) # genetic overlap for each Xi->Y association
+  )
 
 
-    # name the effects of the exposures
-    for (i in 1:NX) {
-        rownames(results)[i] <- c(paste("Adjusted Bx", i, "y", sep = ""))
-    }
+  ## model estimation options
 
-    # name the genetic effects mediated by the exposures
-    for (i in 1:NX) {
-        rownames(results)[NX + i] <- c(paste("Mediation m", i, sep = ""))
-    }
+  # run model
+  fit_mod <- lavaan(model = model, data = data, sample.cov = cov, ...)
 
-    # total mediation
-    rownames(results)[2*NX + 1] <- "Total mediation"
 
-    # name the genetic confounding for each exposure-outcome association
-    for (i in 2:(NX + 1)) {
-        rownames(results)[(2*NX + i)] <- c(paste("Genetic confounding Bx", (i - 1), "y", sep = ""))
-    }
+  ## parameter estimates options
+  pe <- parameterEstimates(fit_mod)
 
-    # name the genetic overlap for each exposure-outcome association
-    for (i in 2:(NX + 1)) {
-        rownames(results)[3*NX + i] <- c(paste("Genetic overlap x", (i - 1), "y", sep = ""))
-    }
 
-    results$pvalue = as.numeric(formatC(2*pnorm(-abs(results$z)), digits = 3))
+  results <- data.frame(rbind(
+    pe[pe$label %in% labelsb,],
+    pe[pe$label %in% labelsm,],
+    pe[pe$label %in% "m",],
+    pe[pe$label %in% labels_gc,],
+    pe[pe$label %in% labels_go,]
+  ))[, c(5:dim(pe)[2])]
 
-    ## Print results
-    print(results)
+  results <- results %>%
+    mutate_if(is.numeric, round, 3) # round all numeric variables
 
-    return(fit_mod) # model output can be used, e.g. using summary() function
+
+  # name the effects of the exposures
+  for (i in 1:NX) {
+    rownames(results)[i] <- c(paste("Adjusted Bx", i, "y", sep = ""))
+  }
+
+  # name the genetic effects mediated by the exposures
+  for (i in 1:NX) {
+    rownames(results)[NX + i] <- c(paste("Mediation m", i, sep = ""))
+  }
+
+  # total mediation
+  rownames(results)[2*NX + 1] <- "Total mediation"
+
+  # name the genetic confounding for each exposure-outcome association
+  for (i in 2:(NX + 1)) {
+    rownames(results)[(2*NX + i)] <- c(paste("Genetic confounding Bx", (i - 1), "y", sep = ""))
+  }
+
+  # name the genetic overlap for each exposure-outcome association
+  for (i in 2:(NX + 1)) {
+    rownames(results)[3*NX + i] <- c(paste("Genetic overlap x", (i - 1), "y", sep = ""))
+  }
+
+  results$pvalue = as.numeric(formatC(2*pnorm(-abs(results$z)), digits = 3))
+
+  ## Print results
+  print(results)
+
+  return(fit_mod) # model output can be used, e.g. using summary() function
 
 }
 
@@ -238,10 +238,10 @@ gsensX = function(rxy,
                   h2,
                   constrain = NULL,
                   print = FALSE) {
-    mat = matrix(c(1, rgx, rgy, rgx, 1, rxy, rgy, rxy, 1), ncol = 3, nrow = 3)
-    colnames(mat) = c("G","X","Y"); rownames(mat) = c("G","X","Y")
+  mat = matrix(c(1, rgx, rgy, rgx, 1, rxy, rgy, rxy, 1), ncol = 3, nrow = 3)
+  colnames(mat) = c("G","X","Y"); rownames(mat) = c("G","X","Y")
 
-    model1 <- paste('
+  model1 <- paste('
                   Y ~ bxy*X + bgy*GG    # Y depends on X and true polygenic score
                   X ~ bgx*GG            # X depends on true polygenic score
                   GG =~ l*G             # true polygenic score is estimated by G
@@ -256,20 +256,20 @@ gsensX = function(rxy,
                   ')
 
 
-    fit1 = lavaan(model1, sample.cov = mat, sample.nobs = n, estimator = "GLS")
-    if (print) {  summary(fit1)}
-    pe = parameterestimates(fit1)
-    pe$pvalue = formatC(2*pnorm(-abs(pe$z)), digits = 5)
-    results = data.frame(rbind(
-        pe[pe$label == "bxy",],
-        pe[pe$label == "conf",],
-        pe[pe$label == "total",]
-    ))[,5:10]
-    results = results %>%
-        mutate_if(is.numeric, round, 3) # round all numeric variables
+  fit1 = lavaan(model1, sample.cov = mat, sample.nobs = n, estimator = "GLS")
+  if (print) {  summary(fit1)}
+  pe = parameterestimates(fit1)
+  pe$pvalue = formatC(2*pnorm(-abs(pe$z)), digits = 5)
+  results = data.frame(rbind(
+    pe[pe$label == "bxy",],
+    pe[pe$label == "conf",],
+    pe[pe$label == "total",]
+  ))[,5:10]
+  results = results %>%
+    mutate_if(is.numeric, round, 3) # round all numeric variables
 
-    rownames(results) = c("Adjusted Bxy","Genetic confounding","Total effect")
-    results
+  rownames(results) = c("Adjusted Bxy","Genetic confounding","Total effect")
+  results
 }
 
 
@@ -319,15 +319,15 @@ gsensXY = function(rxy,
                    constrain = NULL,
                    print = FALSE) {
 
-    lower = c(
-        1,
-        rg1g2,1,
-        rg1x,rg2x,1,
-        rg1y,rg2y,rxy,1)
+  lower = c(
+    1,
+    rg1g2,1,
+    rg1x,rg2x,1,
+    rg1y,rg2y,rxy,1)
 
-    mat = getCov(lower, names = c("G1","G2","X","Y"))
+  mat = getCov(lower, names = c("G1","G2","X","Y"))
 
-    model1 <- paste('
+  model1 <- paste('
                   Y ~ bxy*X + bg1y*GG1 + bg2y*GG2   # Y depends on X and true polygenic scores
                   X ~ bg1x*GG1 + bg2x*GG2           # X depends on true polygenic scores
                   GG1 =~ lg1*G1                     # true polygenic score is estimated by G1
@@ -351,21 +351,21 @@ gsensXY = function(rxy,
 
                   ')
 
-    fit1 = lavaan(model1, sample.cov = mat, sample.nobs = n, estimator = "GLS")
-    if (print) {  summary(fit1)}
-    pe = parameterestimates(fit1)
-    pe$pvalue = formatC(2*pnorm(-abs(pe$z)), digits = 5)
-    results = data.frame(rbind(
-        pe[pe$label == "bxy",],
-        pe[pe$label == "conf",],
-        pe[pe$label == "total",]
-    ))[, 5:10]
+  fit1 = lavaan(model1, sample.cov = mat, sample.nobs = n, estimator = "GLS")
+  if (print) {  summary(fit1)}
+  pe = parameterestimates(fit1)
+  pe$pvalue = formatC(2*pnorm(-abs(pe$z)), digits = 5)
+  results = data.frame(rbind(
+    pe[pe$label == "bxy",],
+    pe[pe$label == "conf",],
+    pe[pe$label == "total",]
+  ))[, 5:10]
 
-    results = results %>%
-        mutate_if(is.numeric, round, 3) # round all numeric variables
+  results = results %>%
+    mutate_if(is.numeric, round, 3) # round all numeric variables
 
-    rownames(results) = c("Adjusted Bxy","Genetic confounding","Total effect")
-    results
+  rownames(results) = c("Adjusted Bxy","Genetic confounding","Total effect")
+  results
 
 }
 
