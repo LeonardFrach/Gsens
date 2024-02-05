@@ -8,18 +8,20 @@ sapply(load.lib, require, character = TRUE) # Load libraries
 #' This is the recommended function for most scenarios, and the only function that has been extended to the multiple exposure case.
 
 #' @param data Either a data frame of raw data or a covariance/correlation matrix, although the latter one is currently not recommended.
-#' If 'data' is a cov/cor matrix, the additional lavaan argument 'sample.nobs' (number of observations) is required.
+#' If `data` is a covariance or correlation matrix, the additional lavaan argument `sample.nobs` (number of observations) is required.
 #' @param h2 Heritability estimate of the outcome (Y).
 #' Can be chosen to be any external value, e.g. SNP- or twin-heritability estimates.
 #' @param exposures Vector of variable name(s) of the exposure(s).
-#' Example: exposures = c("x1", "x2")
+#' Example: `exposures = c("x1", "x2")`
 #' @param outcome Name of the outcome variable.
 #' @param pgs Name of the polygenic score variable (pgs corresponding to the outcome).
-#' @param ... Additional arguments passed from lavaan, including 'se' (estimation method for the standard errors),
-#' 'estimator' (estimator used for model, default is ML), 'bootstrap' (number of bootstraps for CIs, default = 1000),
-#' 'sample.nobs' (Number of observations for estimation using summary data, not recommended), and more.
-#' See the lavaan documentation for details, e.g., ?lavaan::lavaan() or ?lavaan::lavOptions()
-#' @return The Gsens model output will be returned as a lavaan object. For example, the summary() or lavaan::parameterEstimates() functions can be used for more detailed outputs, e.g. for standardized estimates.
+#' @param ... Additional arguments passed from lavaan, including `se` (estimation method for the standard errors),
+#' `estimator` (estimator used for model, default is ML), `bootstrap` (number of bootstraps for CIs, default = 1000),
+#' `sample.nobs` (Number of observations for estimation using summary data, not recommended), and more.
+#' See the lavaan documentation for details, e.g., [lavaan::lavaan()] or [lavaan::lavOptions()]
+#'
+#' @return The Gsens model output will be returned as a lavaan object.
+#' For example, the `summary()` or [lavaan::parameterEstimates()] functions can be used for more detailed outputs, e.g. for standardized estimates.
 
 #' @examples
 #' \dontrun{
@@ -34,10 +36,13 @@ sapply(load.lib, require, character = TRUE) # Load libraries
 #' @import dplyr
 #' @import purrr
 
-#' @references Frach, L., Rijsdijk, F., Dudbridge, F. & Pingault, J. B. (in preparation).
-#' Adjusting for genetic confounding using polygenic scores within structural equation models
-#' @references Pingault, J. B., Rijsdijk, F., Schoeler, T., Choi, S. W., Selzam, S., Krapohl, E., ... & Dudbridge, F. (2021).
-#' Genetic sensitivity analysis: Adjusting for genetic confounding in epidemiological associations. PLoS genetics, 17(6), e1009590. https://doi.org/10.1371/journal.pgen.1009590
+#' @references
+#' Frach, L., Rijsdijk, F., Dudbridge, F. & Pingault, J. B. (in preparation).
+#' Adjusting for genetic confounding using polygenic scores within structural equation models.
+#'
+#' Pingault, J. B., Rijsdijk, F., Schoeler, T., Choi, S. W., Selzam, S., Krapohl, E., ... & Dudbridge, F. (2021).
+#' Genetic sensitivity analysis: Adjusting for genetic confounding in epidemiological associations.
+#' *PLoS genetics, 17*(6), e1009590. \doi{10.1371/journal.pgen.1009590}
 
 gsensY = function(data,
                   h2,
