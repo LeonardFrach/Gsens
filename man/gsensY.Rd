@@ -4,12 +4,9 @@
 \alias{gsensY}
 \title{Adjusting for genetic confounding using PGS for the outcome}
 \usage{
-gsensY(data, h2, exposures, outcome, pgs, print = "all", ...)
+gsensY(data, h2, exposures, outcome, pgs, ...)
 }
 \arguments{
-\item{data}{Either a data frame of raw data or a covariance/correlation matrix, although the latter one is currently not recommended.
-If \code{data} is a covariance or correlation matrix, the additional lavaan argument \code{sample.nobs} (number of observations) is required.}
-
 \item{h2}{Heritability estimate of the outcome (Y).
 Can be chosen to be any external value, e.g. SNP- or twin-heritability estimates.}
 
@@ -30,14 +27,19 @@ The Gsens model output will be returned as a lavaan object.
 For example, the \code{summary()} or \code{\link[lavaan:parameterEstimates]{lavaan::parameterEstimates()}} functions can be used for more detailed outputs, e.g. for standardized estimates.
 }
 \description{
-Adjusting for genetic confounding in exposure-outcome associations using the polygenic score for the outcome.
+Adjusting for genetic confounding in exposure--outcome associations using the polygenic score for the outcome.
 This is the recommended function for most scenarios, and the only function that has been extended to the multiple exposure case.
 }
 \examples{
 \dontrun{
 df <- data.frame(X1, X2, X3, Y, PGS_outcome)
-gsens_out <- gsensY(df, h2 = 0.5, exposures = c("X1", "X2", "X3"), outcome = "Y", pgs = "PGS_outcome")
+gsens_out <- gsensY(data = df, h2 = 0.5, exposures = c("X1", "X2", "X3"), outcome = "Y", pgs = "PGS_outcome")
+## print GsensY results
+gsens_out@external$gsensY
+## any other standard lavaan output also available
+summary(gsens_out)
 }
+
 }
 \references{
 Frach, L., Rijsdijk, F., Dudbridge, F. & Pingault, J. B. (in preparation).

@@ -1,14 +1,14 @@
-load.lib = c('lavaan', 'dplyr', 'parallel', 'purrr')
+load.lib = c('lavaan') #, 'dplyr', 'parallel', 'purrr')
 install.lib <- load.lib[!load.lib %in% installed.packages()] # Install missing libraries
 sapply(load.lib, require, character = TRUE) # Load libraries
 
 #' Adjusting for genetic confounding using PGS for the outcome
 #'
-#' Adjusting for genetic confounding in exposure-outcome associations using the polygenic score for the outcome.
+#' Adjusting for genetic confounding in exposure--outcome associations using the polygenic score for the outcome.
 #' This is the recommended function for most scenarios, and the only function that has been extended to the multiple exposure case.
 
-#' @param data Either a data frame of raw data or a covariance/correlation matrix, although the latter one is currently not recommended.
-#' If `data` is a covariance or correlation matrix, the additional lavaan argument `sample.nobs` (number of observations) is required.
+# @param data Either a data frame of raw data or a covariance/correlation matrix, although the latter one is currently not recommended.
+# If `data` is a covariance or correlation matrix, the additional lavaan argument `sample.nobs` (number of observations) is required.
 #' @param h2 Heritability estimate of the outcome (Y).
 #' Can be chosen to be any external value, e.g. SNP- or twin-heritability estimates.
 #' @param exposures Vector of variable name(s) of the exposure(s).
@@ -19,22 +19,27 @@ sapply(load.lib, require, character = TRUE) # Load libraries
 #' `estimator` (estimator used for model, default is ML), `bootstrap` (number of bootstraps for CIs, default = 1000),
 #' `sample.nobs` (Number of observations for estimation using summary data, not recommended), and more.
 #' See the lavaan documentation for details, e.g., [lavaan::lavaan()] or [lavaan::lavOptions()]
-#'
+
 #' @return The Gsens model output will be returned as a lavaan object.
 #' For example, the `summary()` or [lavaan::parameterEstimates()] functions can be used for more detailed outputs, e.g. for standardized estimates.
 
 #' @examples
 #' \dontrun{
 #' df <- data.frame(X1, X2, X3, Y, PGS_outcome)
-#' gsens_out <- gsensY(df, h2 = 0.5, exposures = c("X1", "X2", "X3"), outcome = "Y", pgs = "PGS_outcome")
+#' gsens_out <- gsensY(data = df, h2 = 0.5, exposures = c("X1", "X2", "X3"), outcome = "Y", pgs = "PGS_outcome")
+#' ## print GsensY results
+#' gsens_out@external$gsensY
+#' ## any other standard lavaan output also available
+#' summary(gsens_out)
 #' }
+#'
 
 #' @author Leonard Frach & Jean-Baptiste Pingault
 #' @export
 #' @import lavaan
-#' @import parallel
-#' @import dplyr
-#' @import purrr
+# @import parallel
+# @import dplyr
+# @import purrr
 
 #' @references
 #' Frach, L., Rijsdijk, F., Dudbridge, F. & Pingault, J. B. (in preparation).
@@ -49,69 +54,20 @@ gsensY = function(data,
                   exposures,
                   outcome,
                   pgs,
-                  print = "all", ...) {
-
-
-  if (dim(data)[1] != dim(data)[2]) {
-    message("Using raw data as input.")
-
-    data <- as.data.frame(data)
-
-    # use only relevant variables
-    data <- data %>%
-      dplyr::select(all_of(c(exposures, outcome, pgs)))
-
-    # number of exposure
-    NX <- length(exposures)
-
-    names(data)[c((NX + 1):(NX + 2))] <- c("Y","G")
-
-    # no correlation matrix
-    cov <- NULL
-
-  } else if (dim(data)[1] == dim(data)[2] &
-             all(diag(data) == 1)) {
-    message("Using correlation matrix as input. Warning: standard errors might be biased downwards when using correlation matrices in lavaan.")
-
-    cov <- as.matrix(data)
-    data <- as.data.frame(data)
-
-  } else if (dim(data)[1] == dim(data)[2] &
-             !all(diag(data) == 1)) {
-    message("Using covariance matrix as input.")
-
-    cov <- as.matrix(data)
-  }
-
-
-  # if correlation matrix is used
-  if (!is.null(cov)) {
-    data <- NULL
-    # N of exposures
-    NX <- length(exposures)
-    # select relevant variables
-
-    cov <- cov %>% as.data.frame() %>%
-      dplyr::select(all_of(c(exposures, outcome, pgs))) %>%
-      dplyr::filter(rownames(.) %in% colnames(.))
-
-    colnames(cov)[c((NX + 1):(NX + 2))] <- c("Y", "G")
-
-    cov <- cov[c(exposures, outcome, pgs), ]
-    cov <- as.matrix(cov)
-
-  }
+                  #print = "all",
+                  ...) {
 
   # create covariance structure and label for the model
 
   covstruc <- outer(exposures,
                     exposures,
                     function(x, y) paste(x, "~~", y))
-  labelsa = paste0("a", 1:NX)
-  labelsb = paste0("b", 1:NX)
-  labelsm = paste0("m", 1:NX)
-  labels_gc = paste0("gc_", labelsb)
-  labels_go = paste0("go_", labelsb)
+  NX <- length(exposures)
+  labelsa   <- paste0("a", 1:NX)
+  labelsb   <- paste0("b", 1:NX)
+  labelsm   <- paste0("m", 1:NX)
+  labels_gc <- paste0("gc_", labelsb)
+  labels_go <- paste0("go_", labelsb)
 
 
   ### main lavaan model ###
@@ -121,7 +77,7 @@ gsensY = function(data,
 
   ## model specification
 
-  model = c(
+  model <- c(
     paste("Y ~", paste0(c(labelsb,"c"),"*", c(exposures,"GG"), collapse = " + ")),    # Y depends on X and true polygenic score
     paste(exposures,"~", paste0(labelsa,"*","GG")),                                   # X1-Xi depend on true polygenic score
     covstruc[lower.tri(covstruc, diag = TRUE)],                                    # covariance structure
@@ -150,7 +106,7 @@ gsensY = function(data,
   ## model estimation options
 
   # run model
-  fit_mod <- lavaan(model = model, data = data, sample.cov = cov, ...)
+  fit_mod <- lavaan(model = model, ...)
 
 
   ## parameter estimates options
@@ -194,8 +150,8 @@ gsensY = function(data,
 
   results$pvalue = as.numeric(formatC(2*pnorm(-abs(results$z)), digits = 3))
 
-  ## Print results
-  print(results)
+  ## store results in the lavaan object
+  fit_mod@external$gsensY <- results
 
   return(fit_mod) # model output can be used, e.g. using summary() function
 
