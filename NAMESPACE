@@ -3,7 +3,5 @@
 export(gsensX)
 export(gsensXY)
 export(gsensY)
-import(dplyr)
 import(lavaan)
-import(parallel)
-import(purrr)
+importFrom(dplyr,mutate_if)

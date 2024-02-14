@@ -1,14 +1,10 @@
-load.lib = c('lavaan') #, 'dplyr', 'parallel', 'purrr')
-install.lib <- load.lib[!load.lib %in% installed.packages()] # Install missing libraries
-sapply(load.lib, require, character = TRUE) # Load libraries
-
 #' Adjusting for genetic confounding using PGS for the outcome
 #'
 #' Adjusting for genetic confounding in exposure--outcome associations using the polygenic score for the outcome.
 #' This is the recommended function for most scenarios, and the only function that has been extended to the multiple exposure case.
 
-# @param data Either a data frame of raw data or a covariance/correlation matrix, although the latter one is currently not recommended.
-# If `data` is a covariance or correlation matrix, the additional lavaan argument `sample.nobs` (number of observations) is required.
+#' @param data Either a data frame of raw data or a covariance/correlation matrix, although the latter one is currently not recommended.
+#' If `data` is a covariance or correlation matrix, the additional lavaan argument `sample.nobs` (number of observations) is required.
 #' @param h2 Heritability estimate of the outcome (Y).
 #' Can be chosen to be any external value, e.g. SNP- or twin-heritability estimates.
 #' @param exposures Vector of variable name(s) of the exposure(s).
@@ -37,9 +33,7 @@ sapply(load.lib, require, character = TRUE) # Load libraries
 #' @author Leonard Frach & Jean-Baptiste Pingault
 #' @export
 #' @import lavaan
-# @import parallel
-# @import dplyr
-# @import purrr
+#' @importFrom dplyr mutate_if
 
 #' @references
 #' Frach, L., Rijsdijk, F., Dudbridge, F. & Pingault, J. B. (in preparation).
@@ -54,7 +48,6 @@ gsensY = function(data,
                   exposures,
                   outcome,
                   pgs,
-                  #print = "all",
                   ...) {
 
   # create covariance structure and label for the model
@@ -73,7 +66,6 @@ gsensY = function(data,
   ### main lavaan model ###
 
   gC <- numeric()
-
 
   ## model specification
 
@@ -122,7 +114,7 @@ gsensY = function(data,
   ))[, c(5:dim(pe)[2])]
 
   results <- results %>%
-    mutate_if(is.numeric, round, 3) # round all numeric variables
+    dplyr::mutate_if(is.numeric, round, 3) # round all numeric variables
 
 
   # name the effects of the exposures
@@ -178,7 +170,7 @@ gsensY = function(data,
 #' @author Jean-Baptiste Pingault, Tabea Schoeler & Frank Dudbridge
 #' @export
 #' @import lavaan
-#' @import dplyr
+#' @importFrom dplyr mutate_if
 
 #' @references Pingault, J.-B., O’Reilly, P. F., Schoeler, T., Ploubidis, G. B., Rijsdijk, F., & Dudbridge, F. (2018).
 #' Using genetic data to strengthen causal inference in observational research. Nature Reviews Genetics, 19(9), 566–580.
@@ -194,8 +186,9 @@ gsensX = function(rxy,
                   h2,
                   constrain = NULL,
                   print = FALSE) {
-  mat = matrix(c(1, rgx, rgy, rgx, 1, rxy, rgy, rxy, 1), ncol = 3, nrow = 3)
-  colnames(mat) = c("G","X","Y"); rownames(mat) = c("G","X","Y")
+  mat <- matrix(c(1, rgx, rgy, rgx, 1, rxy, rgy, rxy, 1), ncol = 3, nrow = 3)
+  colnames(mat) <- c("G","X","Y")
+  rownames(mat) <- c("G","X","Y")
 
   model1 <- paste('
                   Y ~ bxy*X + bgy*GG    # Y depends on X and true polygenic score
@@ -212,19 +205,20 @@ gsensX = function(rxy,
                   ')
 
 
-  fit1 = lavaan(model1, sample.cov = mat, sample.nobs = n, estimator = "GLS")
+  fit1 <- lavaan(model1, sample.cov = mat, sample.nobs = n, estimator = "GLS")
   if (print) {  summary(fit1)}
-  pe = parameterestimates(fit1)
-  pe$pvalue = formatC(2*pnorm(-abs(pe$z)), digits = 5)
-  results = data.frame(rbind(
+  
+  pe <- parameterestimates(fit1)
+  pe$pvalue <- formatC(2*pnorm(-abs(pe$z)), digits = 5)
+  results <- data.frame(rbind(
     pe[pe$label == "bxy",],
     pe[pe$label == "conf",],
     pe[pe$label == "total",]
   ))[,5:10]
-  results = results %>%
-    mutate_if(is.numeric, round, 3) # round all numeric variables
+  results <- results %>%
+    dplyr::mutate_if(is.numeric, round, 3) # round all numeric variables
 
-  rownames(results) = c("Adjusted Bxy","Genetic confounding","Total effect")
+  rownames(results) <- c("Adjusted Bxy","Genetic confounding","Total effect")
   results
 }
 
@@ -253,7 +247,7 @@ gsensX = function(rxy,
 #' @author Jean-Baptiste Pingault, Tabea Schoeler & Frank Dudbridge
 #' @export
 #' @import lavaan
-#' @import dplyr
+#' @importFrom dplyr mutate_if
 
 #' @references Pingault, J.-B., O’Reilly, P. F., Schoeler, T., Ploubidis, G. B., Rijsdijk, F., & Dudbridge, F. (2018).
 #' Using genetic data to strengthen causal inference in observational research. Nature Reviews Genetics, 19(9), 566–580.
@@ -275,13 +269,13 @@ gsensXY = function(rxy,
                    constrain = NULL,
                    print = FALSE) {
 
-  lower = c(
+  lower <- c(
     1,
     rg1g2,1,
     rg1x,rg2x,1,
     rg1y,rg2y,rxy,1)
 
-  mat = getCov(lower, names = c("G1","G2","X","Y"))
+  mat <- getCov(lower, names = c("G1","G2","X","Y"))
 
   model1 <- paste('
                   Y ~ bxy*X + bg1y*GG1 + bg2y*GG2   # Y depends on X and true polygenic scores
@@ -307,20 +301,21 @@ gsensXY = function(rxy,
 
                   ')
 
-  fit1 = lavaan(model1, sample.cov = mat, sample.nobs = n, estimator = "GLS")
+  fit1 <- lavaan(model1, sample.cov = mat, sample.nobs = n, estimator = "GLS")
   if (print) {  summary(fit1)}
-  pe = parameterestimates(fit1)
-  pe$pvalue = formatC(2*pnorm(-abs(pe$z)), digits = 5)
-  results = data.frame(rbind(
+  
+  pe <- parameterestimates(fit1)
+  pe$pvalue <- formatC(2*pnorm(-abs(pe$z)), digits = 5)
+  results <- data.frame(rbind(
     pe[pe$label == "bxy",],
     pe[pe$label == "conf",],
     pe[pe$label == "total",]
   ))[, 5:10]
 
-  results = results %>%
+  results <- results %>%
     mutate_if(is.numeric, round, 3) # round all numeric variables
 
-  rownames(results) = c("Adjusted Bxy","Genetic confounding","Total effect")
+  rownames(results) <- c("Adjusted Bxy","Genetic confounding","Total effect")
   results
 
 }

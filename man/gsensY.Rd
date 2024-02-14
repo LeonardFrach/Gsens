@@ -7,6 +7,9 @@
 gsensY(data, h2, exposures, outcome, pgs, ...)
 }
 \arguments{
+\item{data}{Either a data frame of raw data or a covariance/correlation matrix, although the latter one is currently not recommended.
+If \code{data} is a covariance or correlation matrix, the additional lavaan argument \code{sample.nobs} (number of observations) is required.}
+
 \item{h2}{Heritability estimate of the outcome (Y).
 Can be chosen to be any external value, e.g. SNP- or twin-heritability estimates.}
 
