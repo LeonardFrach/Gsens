@@ -6,7 +6,7 @@ Authors@R: c(
     person("Leonard", "Frach", email = "leonard.frach.20@ucl.ac.uk", role = c("cre", "aut"), comment = c(ORCID = "0000-0001-6349-8772")),
     person("Tabea", "Schoeler", role = "cph"),
     person("Frank", "Dudbridge", role = "cph"),
-    person("Jean-Baptiste", "Pingault", email = "j.pingault@ucl.ac.uk", role = c("cre", "aut", "fnd"), comment = c(ORCID = "0000-0003-2557-4716")))
+    person("Jean-Baptiste", "Pingault", email = "j.pingault@ucl.ac.uk", role = c("aut", "fnd"), comment = c(ORCID = "0000-0003-2557-4716")))
 Description: Adjusting for genetic confounding using polygenic scores and external heritability estimates in multiple exposure-outcome associations.
 License: GPL
 Encoding: UTF-8
