@@ -146,8 +146,10 @@ gsensY = function(h2,
 
   ## store results in the lavaan object
   fit_mod@external$gsensY <- results
-
+  
+  print(results) # print results
   return(fit_mod) # model output can be used, e.g. using summary() function
+  
 
 }
 
