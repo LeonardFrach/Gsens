@@ -4,46 +4,50 @@
 \alias{gsensY}
 \title{Adjusting for genetic confounding using PGS for the outcome}
 \usage{
-gsensY(data, h2, exposures, outcome, pgs, print = "all", ...)
+gsensY(data, h2, exposures, outcome, pgs, ...)
 }
 \arguments{
-\item{data}{Either a data frame of raw data or a covariance/correlation matrix, although the latter one is currently not recommended.
-If 'data' is a cov/cor matrix, the additional lavaan argument 'sample.nobs' (number of observations) is required.}
-
 \item{h2}{Heritability estimate of the outcome (Y).
 Can be chosen to be any external value, e.g. SNP- or twin-heritability estimates.}
 
-\item{exposures}{Vector of variable name(s) of the exposure(s). 
-Example: exposures = c("x1", "x2")}
+\item{exposures}{Vector of variable name(s) of the exposure(s).
+Example: \code{exposures = c("x1", "x2")}}
 
 \item{outcome}{Name of the outcome variable.}
 
 \item{pgs}{Name of the polygenic score variable (pgs corresponding to the outcome).}
 
-\item{...}{Additional arguments passed from lavaan, including 'se' (estimation method for the standard errors), 
-'estimator' (estimator used for model, default is ML), 'bootstrap' (number of bootstraps for CIs, default = 1000),
-'sample.nobs' (Number of observations for estimation using summary data, not recommended), and more.
-See the lavaan documentation for details, e.g., ?lavaan::lavaan() or ?lavaan::lavOptions()}
+\item{...}{Additional arguments passed from lavaan, including \code{se} (estimation method for the standard errors),
+\code{estimator} (estimator used for model, default is ML), \code{bootstrap} (number of bootstraps for CIs, default = 1000),
+\code{sample.nobs} (Number of observations for estimation using summary data, not recommended), and more.
+See the lavaan documentation for details, e.g., \code{\link[lavaan:lavaan]{lavaan::lavaan()}} or \code{\link[lavaan:lavOptions]{lavaan::lavOptions()}}}
 }
 \value{
-The Gsens model output will be returned as a lavaan object. For example, the summary() or lavaan::parameterEstimates() functions can be used for more detailed outputs, e.g. for standardized estimates.
+The Gsens model output will be returned as a lavaan object.
+For example, the \code{summary()} or \code{\link[lavaan:parameterEstimates]{lavaan::parameterEstimates()}} functions can be used for more detailed outputs, e.g. for standardized estimates.
 }
 \description{
-Adjusting for genetic confounding in exposure-outcome associations using the polygenic score for the outcome.
+Adjusting for genetic confounding in exposure--outcome associations using the polygenic score for the outcome.
 This is the recommended function for most scenarios, and the only function that has been extended to the multiple exposure case.
 }
 \examples{
 \dontrun{
-df <- data.frame(X1, X2, X3, Y, PGS_outcome) 
-gsens_out <- gsensY(df, h2 = 0.5, exposures = c("X1", "X2", "X3"), outcome = "Y", pgs = "PGS_outcome")
+df <- data.frame(X1, X2, X3, Y, PGS_outcome)
+gsens_out <- gsensY(data = df, h2 = 0.5, exposures = c("X1", "X2", "X3"), outcome = "Y", pgs = "PGS_outcome")
+## print GsensY results
+gsens_out@external$gsensY
+## any other standard lavaan output also available
+summary(gsens_out)
 }
+
 }
 \references{
 Frach, L., Rijsdijk, F., Dudbridge, F. & Pingault, J. B. (in preparation).
-Adjusting for genetic confounding using polygenic scores within structural equation models
+Adjusting for genetic confounding using polygenic scores within structural equation models.
 
 Pingault, J. B., Rijsdijk, F., Schoeler, T., Choi, S. W., Selzam, S., Krapohl, E., ... & Dudbridge, F. (2021).
-Genetic sensitivity analysis: Adjusting for genetic confounding in epidemiological associations. PLoS genetics, 17(6), e1009590. https://doi.org/10.1371/journal.pgen.1009590
+Genetic sensitivity analysis: Adjusting for genetic confounding in epidemiological associations.
+\emph{PLoS genetics, 17}(6), e1009590. \doi{10.1371/journal.pgen.1009590}
 }
 \author{
 Leonard Frach & Jean-Baptiste Pingault

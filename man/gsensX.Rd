@@ -22,7 +22,7 @@ gsensX(rxy, rgx, rgy, n, h2, constrain = NULL, print = FALSE)
 \item{print}{Optional. Enables the examination of model parameters (default = FALSE).}
 }
 \value{
-Estimates for the adjusted exposure-outcome association, 
+Estimates for the adjusted exposure-outcome association,
 genetic confounding and the total effect.
 }
 \description{
