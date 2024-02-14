@@ -3,8 +3,9 @@
 #' Adjusting for genetic confounding in exposure--outcome associations using the polygenic score for the outcome.
 #' This is the recommended function for most scenarios, and the only function that has been extended to the multiple exposure case.
 
-#' @param data Either a data frame of raw data or a covariance/correlation matrix, although the latter one is currently not recommended.
-#' If `data` is a covariance or correlation matrix, the additional lavaan argument `sample.nobs` (number of observations) is required.
+#' @param df Either a data frame of raw data or a covariance/correlation matrix, although the latter one is currently not recommended.
+#' If `df` is a data frame containing raw data, the lavaan argument `data = df` can be used, but it is not required.
+#' If `df` is a covariance or correlation matrix, the lavaan arguments `sample.cov = df` and `sample.nobs = n` (number of observations) are required.
 #' @param h2 Heritability estimate of the outcome (Y).
 #' Can be chosen to be any external value, e.g. SNP- or twin-heritability estimates.
 #' @param exposures Vector of variable name(s) of the exposure(s).
@@ -22,7 +23,10 @@
 #' @examples
 #' \dontrun{
 #' df <- data.frame(X1, X2, X3, Y, PGS_outcome)
-#' gsens_out <- gsensY(data = df, h2 = 0.5, exposures = c("X1", "X2", "X3"), outcome = "Y", pgs = "PGS_outcome")
+#' df_cov <- cov(df)
+#' gsens_out <- gsensY(df, h2 = 0.5, exposures = c("X1", "X2", "X3"), outcome = "Y", pgs = "PGS_outcome")
+#' gsens_out_cov <- gsensY(sample.cov = df_cov, sample.nobs = 5000, h2 = 0.5, exposures = c("X1", "X2", "X3"), outcome = "Y", pgs = "PGS_outcome")
+#' 
 #' ## print GsensY results
 #' gsens_out@external$gsensY
 #' ## any other standard lavaan output also available
@@ -33,7 +37,7 @@
 #' @author Leonard Frach & Jean-Baptiste Pingault
 #' @export
 #' @import lavaan
-#' @importFrom dplyr mutate_if
+#' @importFrom dplyr mutate_all
 
 #' @references
 #' Frach, L., Rijsdijk, F., Dudbridge, F. & Pingault, J. B. (in preparation).
@@ -43,8 +47,7 @@
 #' Genetic sensitivity analysis: Adjusting for genetic confounding in epidemiological associations.
 #' *PLoS genetics, 17*(6), e1009590. \doi{10.1371/journal.pgen.1009590}
 
-gsensY = function(data,
-                  h2,
+gsensY = function(h2,
                   exposures,
                   outcome,
                   pgs,
@@ -113,8 +116,7 @@ gsensY = function(data,
     pe[pe$label %in% labels_go,]
   ))[, c(5:dim(pe)[2])]
 
-  results <- results %>%
-    dplyr::mutate_if(is.numeric, round, 3) # round all numeric variables
+  results <- dplyr::mutate_all(results, round, 3)
 
 
   # name the effects of the exposures
@@ -170,7 +172,7 @@ gsensY = function(data,
 #' @author Jean-Baptiste Pingault, Tabea Schoeler & Frank Dudbridge
 #' @export
 #' @import lavaan
-#' @importFrom dplyr mutate_if
+#' @importFrom dplyr mutate_all
 
 #' @references Pingault, J.-B., O’Reilly, P. F., Schoeler, T., Ploubidis, G. B., Rijsdijk, F., & Dudbridge, F. (2018).
 #' Using genetic data to strengthen causal inference in observational research. Nature Reviews Genetics, 19(9), 566–580.
@@ -215,8 +217,7 @@ gsensX = function(rxy,
     pe[pe$label == "conf",],
     pe[pe$label == "total",]
   ))[,5:10]
-  results <- results %>%
-    dplyr::mutate_if(is.numeric, round, 3) # round all numeric variables
+  results <- dplyr::mutate_all(results, round, 3) # round all numeric variables
 
   rownames(results) <- c("Adjusted Bxy","Genetic confounding","Total effect")
   results
@@ -247,7 +248,7 @@ gsensX = function(rxy,
 #' @author Jean-Baptiste Pingault, Tabea Schoeler & Frank Dudbridge
 #' @export
 #' @import lavaan
-#' @importFrom dplyr mutate_if
+#' @importFrom dplyr mutate_all
 
 #' @references Pingault, J.-B., O’Reilly, P. F., Schoeler, T., Ploubidis, G. B., Rijsdijk, F., & Dudbridge, F. (2018).
 #' Using genetic data to strengthen causal inference in observational research. Nature Reviews Genetics, 19(9), 566–580.
@@ -312,8 +313,7 @@ gsensXY = function(rxy,
     pe[pe$label == "total",]
   ))[, 5:10]
 
-  results <- results %>%
-    mutate_if(is.numeric, round, 3) # round all numeric variables
+  results <- dplyr::mutate_all(results, round, 3) # round all numeric variables
 
   rownames(results) <- c("Adjusted Bxy","Genetic confounding","Total effect")
   results
