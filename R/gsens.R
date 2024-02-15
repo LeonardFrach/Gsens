@@ -73,13 +73,13 @@ gsensY = function(data = NULL,
   ## model specification
 
   model <- c(
-    paste("Y ~", paste0(c(labelsb,"c"),"*", c(exposures,"GG"), collapse = " + ")),    # Y depends on X and true polygenic score
+    paste(outcome, "~", paste0(c(labelsb,"c"),"*", c(exposures,"GG"), collapse = " + ")),    # Y depends on X and true polygenic score
     paste(exposures,"~", paste0(labelsa,"*","GG")),                                   # X1-Xi depend on true polygenic score
     covstruc[lower.tri(covstruc, diag = TRUE)],                                    # covariance structure
-    "GG =~ l*G" ,
+    paste("GG =~ l*", pgs),
     "GG ~~ 1*GG",
-    "G ~~ me*G", # rename me here, because it is not measurement error here
-    "Y ~~ Y",
+    paste(pgs, " ~~ p*", pgs), 
+    paste(outcome, " ~~ ", outcome),
     # total mediation effect
     paste("m :=", paste0(labelsa,"*",labelsb, collapse = " + ")),
     paste0(labelsm, " := ", labelsa,"*",labelsb),                                  # specific mediation pathways for each G->Xi->Y
