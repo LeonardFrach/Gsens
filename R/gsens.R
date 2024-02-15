@@ -3,9 +3,8 @@
 #' Adjusting for genetic confounding in exposure--outcome associations using the polygenic score for the outcome.
 #' This is the recommended function for most scenarios, and the only function that has been extended to the multiple exposure case.
 
-#' @param df Either a data frame of raw data or a covariance/correlation matrix, although the latter one is currently not recommended.
-#' If `df` is a data frame containing raw data, the lavaan argument `data = df` can be used, but it is not required.
-#' If `df` is a covariance or correlation matrix, the lavaan arguments `sample.cov = df` and `sample.nobs = n` (number of observations) are required.
+#' @param data Optional. Used when input contains raw data (data frame) or a covariance/correlation matrix, although the latter one is currently not recommended.
+#' If input is a covariance or correlation matrix (latter one not recommended), the lavaan arguments `sample.cov = df_cov` and `sample.nobs = n` are required, where `df_cov` should be the name of your input data and `n` the sample size.
 #' @param h2 Heritability estimate of the outcome (Y).
 #' Can be chosen to be any external value, e.g. SNP- or twin-heritability estimates.
 #' @param exposures Vector of variable name(s) of the exposure(s).
@@ -24,7 +23,7 @@
 #' \dontrun{
 #' df <- data.frame(X1, X2, X3, Y, PGS_outcome)
 #' df_cov <- cov(df)
-#' gsens_out <- gsensY(df, h2 = 0.5, exposures = c("X1", "X2", "X3"), outcome = "Y", pgs = "PGS_outcome")
+#' gsens_out <- gsensY(data = df, h2 = 0.5, exposures = c("X1", "X2", "X3"), outcome = "Y", pgs = "PGS_outcome")
 #' gsens_out_cov <- gsensY(sample.cov = df_cov, sample.nobs = 5000, h2 = 0.5, exposures = c("X1", "X2", "X3"), outcome = "Y", pgs = "PGS_outcome")
 #' 
 #' ## print GsensY results
@@ -47,7 +46,8 @@
 #' Genetic sensitivity analysis: Adjusting for genetic confounding in epidemiological associations.
 #' *PLoS genetics, 17*(6), e1009590. \doi{10.1371/journal.pgen.1009590}
 
-gsensY = function(h2,
+gsensY = function(data = NULL,
+                  h2,
                   exposures,
                   outcome,
                   pgs,
@@ -101,7 +101,7 @@ gsensY = function(h2,
   ## model estimation options
 
   # run model
-  fit_mod <- lavaan(model = model, ...)
+  fit_mod <- lavaan(model = model, data = data, ...)
 
 
   ## parameter estimates options
