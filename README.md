@@ -1,7 +1,7 @@
 Simple simulated data set and example
 ================
 Leo Frach
-2023-12-21
+2024-03-04
 
 ## Citation
 
@@ -31,14 +31,16 @@ implemented:
 
 We strongly recommend using the updated `gsensY()` function, since it
 has been optimised, e.g., by including raw data as input.<br> As for all
-lavaan models, we recommend *against* using a correlation
-matrix as input but rather a covariance matrix if only summary data is
+lavaan models, we recommend *against* using a correlation matrix as
+input but rather a covariance matrix if only summary data is
 available.<br> Lastly, we recommend standardising the polygenic score
 before regressing out potential batch effects (e.g., genotyping array,
 genetic PCs).<br> All phenotypic variables should **not** be
 standardised. However, if you want to get standardised estimates, the
-additional `lavaan` argument `std.all = TRUE` can be passed
-on to `gsensY()`, or output can be customized using the `parameterEstimates()` function with the argument `standardized = TRUE` on the output of the `gsensY()` function.
+additional `lavaan` argument `std.all = TRUE` can be passed on to
+`gsensY()`, or output can be customized using the `parameterEstimates()`
+function with the argument `standardized = TRUE` on the output of the
+`gsensY()` function.
 
 ## Help
 
@@ -150,10 +152,9 @@ library(Gsens)
 
 ``` r
 # Using raw data
-gsensY(myData, h2 = h^2, exposures = c("X1", "X2"), pgs = "G", outcome = "Y") # this should correspond to the population model
+gsens_out <- gsensY(myData, h2 = h^2, exposures = c("X1", "X2"), pgs = "G", outcome = "Y") # this should correspond to the population model
+gsens_out@external$gsensY
 ```
-
-    ## Using raw data as input.
 
     ##                            est    se     z   pvalue ci.lower ci.upper
     ## Adjusted Bx1y            0.095 0.015 6.383 1.74e-10    0.066    0.124
@@ -168,10 +169,9 @@ gsensY(myData, h2 = h^2, exposures = c("X1", "X2"), pgs = "G", outcome = "Y") # 
 
 ``` r
 # Using covariance matrix + sample size
-gsensY(cov1, sample.nobs = n, h2 = h^2, exposures = c("X1", "X2"), pgs = "G", outcome = "Y")
+gsens_out_cov <- gsensY(sample.cov = cov1, sample.nobs = n, h2 = h^2, exposures = c("X1", "X2"), pgs = "G", outcome = "Y")
+gsens_out_cov@external$gsensY
 ```
-
-    ## Using covariance matrix as input.
 
     ##                            est    se     z   pvalue ci.lower ci.upper
     ## Adjusted Bx1y            0.095 0.015 6.383 1.74e-10    0.066    0.124
