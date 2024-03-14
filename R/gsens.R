@@ -89,9 +89,15 @@ gsensY = function(data = NULL,
            paste0(labelsb, collapse = ", "),"))"," + c"),
     paste('h == sqrt(', h2,')'),
     for (i in 1:NX) {                                                              # genetic confounding for each Xi->Y association
-      gC <- c(gC, paste0(labels_gc[i], " := ",
-                         paste0(labelsa[i],"*", labelsb[-i],"*", labelsa[-i],
-                                collapse = " + "), " + ", labelsa[i], "*c"))
+        if (NX > 1) {
+            gC <- c(gC, paste0(labels_gc[i], " := ",
+                               paste0(labelsa[i],"*", labelsb[-i],"*", labelsa[-i],
+                                      collapse = " + "), " + ", labelsa[i], "*c"))
+        } else {
+            gC <- c(gC, paste0(labels_gc[i], " := ",
+                               paste0(labelsa[i], "*c")))
+        }
+        
     },
     gC,
     paste0(labels_go, " := ", labelsa,"*", labelsa,"*", labelsb, " + ", labels_gc) # genetic overlap for each Xi->Y association
