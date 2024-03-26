@@ -111,7 +111,6 @@ gsensY = function(data = NULL,
                                paste0(labelsa, "*c")))
         },
         VarY,
-        gC,
         paste0(labels_go, " := ", labelsa,"*", labelsa,"*", labelsb, " + ", labels_gc) # genetic overlap for each Xi->Y association
     )
     
@@ -151,13 +150,13 @@ gsensY = function(data = NULL,
     rownames(results)[2*NX + 1] <- "Total mediation"
     
     # name the genetic confounding for each exposure-outcome association
-    for (i in 2:(NX + 1)) {
-        rownames(results)[(2*NX + i)] <- c(paste("Genetic confounding Bx", (i - 1), "y", sep = ""))
+    for (i in 1:NX) {
+        rownames(results)[(2*NX + 1 + i)] <- c(paste("Genetic confounding Bx", i, "y", sep = ""))
     }
     
     # name the genetic overlap for each exposure-outcome association
-    for (i in 2:(NX + 1)) {
-        rownames(results)[3*NX + i] <- c(paste("Genetic overlap x", (i - 1), "y", sep = ""))
+    for (i in 1:NX) {
+        rownames(results)[3*NX + 1 + i] <- c(paste("Genetic overlap x", i, "y", sep = ""))
     }
     
     results$pvalue = as.numeric(formatC(2*pnorm(-abs(results$z)), digits = 3))
