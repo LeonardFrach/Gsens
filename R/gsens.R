@@ -52,110 +52,122 @@ gsensY = function(data = NULL,
                   outcome,
                   pgs,
                   ...) {
-
-  # create covariance structure and label for the model
-
-  covstruc <- outer(exposures,
-                    exposures,
-                    function(x, y) paste(x, "~~", y))
-  NX <- length(exposures)
-  labelsa   <- paste0("a", 1:NX)
-  labelsb   <- paste0("b", 1:NX)
-  labelsm   <- paste0("m", 1:NX)
-  labels_gc <- paste0("gc_", labelsb)
-  labels_go <- paste0("go_", labelsb)
-
-
-  ### main lavaan model ###
-
-  gC <- numeric()
-
-  ## model specification
-
-  model <- c(
-    paste(outcome, "~", paste0(c(labelsb,"c"),"*", c(exposures,"GG"), collapse = " + ")),    # Y depends on X and true polygenic score
-    paste(exposures,"~", paste0(labelsa,"*","GG")),                                   # X1-Xi depend on true polygenic score
-    covstruc[lower.tri(covstruc, diag = TRUE)],                                    # covariance structure
-    paste("GG =~ l*", pgs),
-    "GG ~~ 1*GG",
-    paste(pgs, " ~~ p*", pgs), 
-    paste(outcome, " ~~ ", outcome),
-    # total mediation effect
-    paste("m :=", paste0(labelsa,"*",labelsb, collapse = " + ")),
-    paste0(labelsm, " := ", labelsa,"*",labelsb),                                  # specific mediation pathways for each G->Xi->Y
-    # heritability constraints
-    paste0("h := ","t(matrix(","c(",
-           paste0(labelsa, collapse = ", "),")))"," %*% ","matrix(c(",
-           paste0(labelsb, collapse = ", "),"))"," + c"),
-    paste('h == sqrt(', h2,')'),
-    for (i in 1:NX) {                                                              # genetic confounding for each Xi->Y association
-        if (NX > 1) {
-            gC <- c(gC, paste0(labels_gc[i], " := ",
-                               paste0(labelsa[i],"*", labelsb[-i],"*", labelsa[-i],
-                                      collapse = " + "), " + ", labelsa[i], "*c"))
-        } else {
-            gC <- c(gC, paste0(labels_gc[i], " := ",
-                               paste0(labelsa[i], "*c")))
-        }
+    
+    # create covariance structure and label for the model
+    
+    covstruc <- outer(exposures,
+                      exposures,
+                      function(x, y) paste(x, "~~", y))
+    NX <- length(exposures)
+    labelsa   <- paste0("a", 1:NX)
+    labelsb   <- paste0("b", 1:NX)
+    labelsm   <- paste0("m", 1:NX)
+    labels_gc <- paste0("gc_", labelsb)
+    labels_go <- paste0("go_", labelsb)
+    labels_vX <- paste0("vX", 1:NX)
+    labels_eX <- paste0("eX", 1:NX)
+    
+    
+    ### main lavaan model ###
+    
+    gC <- numeric()
+    
+    ## model specification
+    
+    model <- c(
+        paste(outcome, "~", paste0(c(labelsb,"c"),"*", c(exposures,"GG"), collapse = " + ")),    # Y depends on X and true polygenic score
+        paste(exposures,"~", paste0(labelsa,"*","GG")),                                   # X1-Xi depend on true polygenic score
+        paste("GG =~ lg*", pgs),
+        "GG ~~ 1*GG",
+        paste0(exposures, " ~~ ", labels_eX, "*", exposures),  
         
-    },
-    gC,
-    paste0(labels_go, " := ", labelsa,"*", labelsa,"*", labelsb, " + ", labels_gc) # genetic overlap for each Xi->Y association
-  )
-
-
-  ## model estimation options
-
-  # run model
-  fit_mod <- lavaan(model = model, data = data, ...)
-
-
-  ## parameter estimates options
-  pe <- parameterEstimates(fit_mod)
-
-
-  results <- data.frame(rbind(
-    pe[pe$label %in% labelsb,],
-    pe[pe$label %in% labelsm,],
-    pe[pe$label %in% "m",],
-    pe[pe$label %in% labels_gc,],
-    pe[pe$label %in% labels_go,]
-  ))[, c(5:dim(pe)[2])]
-
-  results <- dplyr::mutate_all(results, round, 3)
-
-
-  # name the effects of the exposures
-  for (i in 1:NX) {
-    rownames(results)[i] <- c(paste("Adjusted Bx", i, "y", sep = ""))
-  }
-
-  # name the genetic effects mediated by the exposures
-  for (i in 1:NX) {
-    rownames(results)[NX + i] <- c(paste("Mediation m", i, sep = ""))
-  }
-
-  # total mediation
-  rownames(results)[2*NX + 1] <- "Total mediation"
-
-  # name the genetic confounding for each exposure-outcome association
-  for (i in 2:(NX + 1)) {
-    rownames(results)[(2*NX + i)] <- c(paste("Genetic confounding Bx", (i - 1), "y", sep = ""))
-  }
-
-  # name the genetic overlap for each exposure-outcome association
-  for (i in 2:(NX + 1)) {
-    rownames(results)[3*NX + i] <- c(paste("Genetic overlap x", (i - 1), "y", sep = ""))
-  }
-
-  results$pvalue = as.numeric(formatC(2*pnorm(-abs(results$z)), digits = 3))
-
-  ## store results in the lavaan object
-  fit_mod@external$gsensY <- results
-  
-  return(fit_mod) # model output can be used, e.g. using summary() function
-  
-
+        paste(pgs, " ~~ vp*", pgs), 
+        paste(outcome, " ~~ ResVarY*", outcome),
+        # total mediation effect
+        paste("m :=", paste0(labelsa,"*",labelsb, collapse = " + ")),
+        paste0(labelsm, " := ", labelsa,"*",labelsb),                                  # specific mediation pathways for each G->Xi->Y
+        # heritability constraints
+        
+        ## MODEL CONSTRAINTS:
+        paste0(labels_vX, " := ", labelsa, "*", labelsa, " + ", labels_eX),
+        paste0("h := ", paste0(labelsm, collapse = " + ")," + c"),
+        paste(h2, " == (h^2)/VarY"),
+        # genetic confounding for each Xi->Y association
+        if (NX > 1) {
+            for (i in 1:NX) {     
+                VarY <- paste0("VarY := ResVarY + c^2 + ", paste0("2*c*", labelsa, "*", labelsb, collapse = " + "), 
+                               " + ", paste0("2*", labelsb[i], "*", labelsb[-i], "*", labelsa[i], "*", labelsa[-i], collapse = " + "), " + ",
+                               paste0(labelsb, "*", labelsb, "*", labels_vX, collapse = " + "))
+                
+                gC <- c(gC, paste0(labels_gc[i], " := ",
+                                   paste0(labelsa[i],"*", labelsb[-i],"*", labelsa[-i],
+                                          collapse = " + "), " + ", labelsa[i], "*c"))
+            }
+        } else {
+            
+            VarY <- paste0("VarY := ResVarY + (c^2 + 2*c*", labelsm, "+", labelsb, "*", labelsb, "*", labels_vX, ")")
+            
+            gC <- c(gC, paste0(labels_gc, " := ",
+                               paste0(labelsa, "*c")))
+        },
+        VarY,
+        gC,
+        paste0(labels_go, " := ", labelsa,"*", labelsa,"*", labelsb, " + ", labels_gc) # genetic overlap for each Xi->Y association
+    )
+    
+    
+    ## model estimation options
+    
+    # run model
+    fit_mod <- lavaan(model = model, data = data, ...)
+    
+    
+    ## parameter estimates options
+    pe <- parameterEstimates(fit_mod)
+    
+    
+    results <- data.frame(rbind(
+        pe[pe$label %in% labelsb,],
+        pe[pe$label %in% labelsm,],
+        pe[pe$label %in% "m",],
+        pe[pe$label %in% labels_gc,],
+        pe[pe$label %in% labels_go,]
+    ))[, c(5:dim(pe)[2])]
+    
+    results <- dplyr::mutate_all(results, round, 3)
+    
+    
+    # name the effects of the exposures
+    for (i in 1:NX) {
+        rownames(results)[i] <- c(paste("Adjusted Bx", i, "y", sep = ""))
+    }
+    
+    # name the genetic effects mediated by the exposures
+    for (i in 1:NX) {
+        rownames(results)[NX + i] <- c(paste("Mediation m", i, sep = ""))
+    }
+    
+    # total mediation
+    rownames(results)[2*NX + 1] <- "Total mediation"
+    
+    # name the genetic confounding for each exposure-outcome association
+    for (i in 2:(NX + 1)) {
+        rownames(results)[(2*NX + i)] <- c(paste("Genetic confounding Bx", (i - 1), "y", sep = ""))
+    }
+    
+    # name the genetic overlap for each exposure-outcome association
+    for (i in 2:(NX + 1)) {
+        rownames(results)[3*NX + i] <- c(paste("Genetic overlap x", (i - 1), "y", sep = ""))
+    }
+    
+    results$pvalue = as.numeric(formatC(2*pnorm(-abs(results$z)), digits = 3))
+    
+    ## store results in the lavaan object
+    fit_mod@external$gsensY <- results
+    
+    return(fit_mod) # model output can be used, e.g. using summary() function
+    
+    
 }
 
 
