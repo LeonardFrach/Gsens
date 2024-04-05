@@ -103,14 +103,15 @@ gsensY = function(data = NULL,
                                    paste0(labelsa[i],"*", labelsb[-i],"*", labelsa[-i],
                                           collapse = " + "), " + ", labelsa[i], "*c"))
             }
+            gC
         } else {
             
             VarY <- paste0("VarY := ResVarY + (c^2 + 2*c*", labelsm, "+", labelsb, "*", labelsb, "*", labels_vX, ")")
             
-            gC <- c(gC, paste0(labels_gc, " := ",
-                               paste0(labelsa, "*c")))
+            (gC <- paste0(labels_gc, " := ",
+                          paste0(labelsa, "*c")))
         },
-        gC,
+        
         VarY,
         paste0(labels_go, " := ", labelsa,"*", labelsa,"*", labelsb, " + ", labels_gc) # genetic overlap for each Xi->Y association
     )
@@ -133,8 +134,6 @@ gsensY = function(data = NULL,
         pe[pe$label %in% labels_gc,],
         pe[pe$label %in% labels_go,]
     ))[, c(5:dim(pe)[2])]
-    
-    results <- dplyr::mutate_all(results, round, 3)
     
     
     # name the effects of the exposures
@@ -160,7 +159,9 @@ gsensY = function(data = NULL,
         rownames(results)[3*NX + 1 + i] <- c(paste("Genetic overlap x", i, "y", sep = ""))
     }
     
-    results$pvalue = as.numeric(formatC(2*pnorm(-abs(results$z)), digits = 3))
+    results$pvalue <- format(2*pnorm(-abs(results$z)), digits = 3, scientific = TRUE)
+    results <- results %>% dplyr::mutate_at(vars(-pvalue), round, 3)
+    
     
     ## store results in the lavaan object
     fit_mod@external$gsensY <- results
@@ -169,6 +170,7 @@ gsensY = function(data = NULL,
     
     
 }
+
 
 
 
