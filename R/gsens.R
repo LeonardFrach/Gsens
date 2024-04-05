@@ -110,6 +110,7 @@ gsensY = function(data = NULL,
             gC <- c(gC, paste0(labels_gc, " := ",
                                paste0(labelsa, "*c")))
         },
+        gC,
         VarY,
         paste0(labels_go, " := ", labelsa,"*", labelsa,"*", labelsb, " + ", labels_gc) # genetic overlap for each Xi->Y association
     )
