@@ -36,7 +36,7 @@
 #' @author Leonard Frach & Jean-Baptiste Pingault
 #' @export
 #' @import lavaan
-#' @importFrom dplyr mutate_all
+#' @importFrom dplyr mutate across
 
 #' @references
 #' Frach, L., Rijsdijk, F., Dudbridge, F. & Pingault, J. B. (in preparation).
@@ -160,7 +160,7 @@ gsensY = function(data = NULL,
     }
     
     results$pvalue <- format(2*pnorm(-abs(results$z)), digits = 3, scientific = TRUE)
-    results <- results %>% dplyr::mutate_at(vars(-pvalue), round, 3)
+    results <- results |> dplyr::mutate(dplyr::across(!"pvalue", \(x) round(x, 3)))
     
     
     ## store results in the lavaan object
