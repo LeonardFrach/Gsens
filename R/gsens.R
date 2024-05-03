@@ -11,6 +11,9 @@
 #' Example: `exposures = c("x1", "x2")`
 #' @param outcome Name of the outcome variable.
 #' @param pgs Name of the polygenic score variable (pgs corresponding to the outcome).
+#' @param model Optional. If additional variables beyond exposures, PGS and outcome are used, e.g., measured confounders,
+#' these additional relations can be specified and will be added to the GsensY model. Example: `model = "X1 ~ Z; X2 ~ Z"`. 
+#' If `model` is not specified, the standard GsensY model will be estimated. 
 #' @param ... Additional arguments passed from lavaan, including `se` (estimation method for the standard errors),
 #' `estimator` (estimator used for model, default is ML), `bootstrap` (number of bootstraps for CIs, default = 1000),
 #' `sample.nobs` (Number of observations for estimation using summary data, not recommended), and more.
@@ -51,6 +54,7 @@ gsensY = function(data = NULL,
                   exposures,
                   outcome,
                   pgs,
+                  model = NULL,
                   ...) {
     
     # create covariance structure and label for the model
@@ -69,46 +73,54 @@ gsensY = function(data = NULL,
     
     ### main lavaan model ###
     
+    # empty variable for genetic confounding
     gC <- numeric()
+    
+    # check if additional model arguments were passed on
+    if (!is.null(model)) {
+        model <- model
+    } else {
+        model <- NULL
+    }
     
     ## model specification
     
-    model <- c(
-        paste(outcome, "~", paste0(c(labelsb,"c"),"*", c(exposures,"GG"), collapse = " + ")),    # Y depends on X and true polygenic score
-        paste(exposures,"~", paste0(labelsa,"*","GG")),                                   # X1-Xi depend on true polygenic score
-        paste("GG =~ lg*", pgs),
-        "GG ~~ 1*GG",
-        paste0(exposures, " ~~ ", labels_eX, "*", exposures),  
-        
-        paste(pgs, " ~~ vp*", pgs), 
-        paste(outcome, " ~~ ResVarY*", outcome),
-        # total mediation effect
-        paste("m :=", paste0(labelsa,"*",labelsb, collapse = " + ")),
-        paste0(labelsm, " := ", labelsa,"*",labelsb),                                  # specific mediation pathways for each G->Xi->Y
-        # heritability constraints
-        
-        ## MODEL CONSTRAINTS:
-        paste0("h := ", paste0(labelsm, collapse = " + ")," + c"),
-        paste(h2, " == (h^2)/VarY"),
-        
-        # Observed variance of Y
-        paste("VarY := ", as.numeric(var(data[, outcome]))), # scaling to get the population variance not needed for now -> * (length(!is.na(data[, outcome])) - 1) / length(!is.na(data[, outcome]))),
-        # genetic confounding for each Xi->Y association
-        if (NX > 1) {
-            for (i in 1:NX) {     
-                
-                gC <- c(gC, paste0(labels_gc[i], " := ",
-                                   paste0(labelsa[i],"*", labelsb[-i],"*", labelsa[-i],
-                                          collapse = " + "), " + ", labelsa[i], "*c"))
-            }
-            gC
-        } else {
-            
-            (gC <- paste0(labels_gc, " := ",
-                          paste0(labelsa, "*c")))
-        },
-        
-        paste0(labels_go, " := ", labelsa,"*", labelsa,"*", labelsb, " + ", labels_gc) # genetic overlap for each Xi->Y association
+    model <- c(model,
+               paste(outcome, "~", paste0(c(labelsb,"c"),"*", c(exposures,"GG"), collapse = " + ")),    # Y depends on X and true polygenic score
+               paste(exposures,"~", paste0(labelsa,"*","GG")),                                   # X1-Xi depend on true polygenic score
+               paste("GG =~ lg*", pgs),
+               "GG ~~ 1*GG",
+               paste0(exposures, " ~~ ", labels_eX, "*", exposures),  
+               
+               paste(pgs, " ~~ vp*", pgs), 
+               paste(outcome, " ~~ ResVarY*", outcome),
+               # total mediation effect
+               paste("m :=", paste0(labelsa,"*",labelsb, collapse = " + ")),
+               paste0(labelsm, " := ", labelsa,"*",labelsb),                                  # specific mediation pathways for each G->Xi->Y
+               # heritability constraints
+               
+               ## MODEL CONSTRAINTS:
+               paste0("h := ", paste0(labelsm, collapse = " + ")," + c"),
+               paste(h2, " == (h^2)/VarY"),
+               
+               # Observed variance of Y
+               paste("VarY := ", as.numeric(var(data[, outcome]))), # scaling to get the population variance not needed for now -> * (length(!is.na(data[, outcome])) - 1) / length(!is.na(data[, outcome]))),
+               # genetic confounding for each Xi->Y association
+               if (NX > 1) {
+                   for (i in 1:NX) {     
+                       
+                       gC <- c(gC, paste0(labels_gc[i], " := ",
+                                          paste0(labelsa[i],"*", labelsb[-i],"*", labelsa[-i],
+                                                 collapse = " + "), " + ", labelsa[i], "*c"))
+                   }
+                   gC
+               } else {
+                   
+                   (gC <- paste0(labels_gc, " := ",
+                                 paste0(labelsa, "*c")))
+               },
+               
+               paste0(labels_go, " := ", labelsa,"*", labelsa,"*", labelsb, " + ", labels_gc) # genetic overlap for each Xi->Y association
     )
     
     
@@ -165,9 +177,6 @@ gsensY = function(data = NULL,
     
     
 }
-
-
-
 
 
 #' Adjusting for genetic confounding using PGS for the exposure
