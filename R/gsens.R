@@ -64,7 +64,6 @@ gsensY = function(data = NULL,
     labelsm   <- paste0("m", 1:NX)
     labels_gc <- paste0("gc_", labelsb)
     labels_go <- paste0("go_", labelsb)
-    labels_vX <- paste0("vX", 1:NX)
     labels_eX <- paste0("eX", 1:NX)
     
     
@@ -89,15 +88,14 @@ gsensY = function(data = NULL,
         # heritability constraints
         
         ## MODEL CONSTRAINTS:
-        paste0(labels_vX, " := ", labelsa, "*", labelsa, " + ", labels_eX),
         paste0("h := ", paste0(labelsm, collapse = " + ")," + c"),
         paste(h2, " == (h^2)/VarY"),
+        
+        # Observed variance of Y
+        paste("VarY := ", as.numeric(var(data[, outcome]))), # scaling to get the population variance not needed for now -> * (length(!is.na(data[, outcome])) - 1) / length(!is.na(data[, outcome]))),
         # genetic confounding for each Xi->Y association
         if (NX > 1) {
             for (i in 1:NX) {     
-                VarY <- paste0("VarY := ResVarY + c^2 + ", paste0("2*c*", labelsa, "*", labelsb, collapse = " + "), 
-                               " + ", paste0("2*", labelsb[i], "*", labelsb[-i], "*", labelsa[i], "*", labelsa[-i], collapse = " + "), " + ",
-                               paste0(labelsb, "*", labelsb, "*", labels_vX, collapse = " + "))
                 
                 gC <- c(gC, paste0(labels_gc[i], " := ",
                                    paste0(labelsa[i],"*", labelsb[-i],"*", labelsa[-i],
@@ -106,13 +104,10 @@ gsensY = function(data = NULL,
             gC
         } else {
             
-            VarY <- paste0("VarY := ResVarY + (c^2 + 2*c*", labelsm, "+", labelsb, "*", labelsb, "*", labels_vX, ")")
-            
             (gC <- paste0(labels_gc, " := ",
                           paste0(labelsa, "*c")))
         },
         
-        VarY,
         paste0(labels_go, " := ", labelsa,"*", labelsa,"*", labelsb, " + ", labels_gc) # genetic overlap for each Xi->Y association
     )
     
