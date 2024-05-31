@@ -3,8 +3,8 @@
 #' Adjusting for genetic confounding in exposure--outcome associations using the polygenic score for the outcome.
 #' This is the recommended function for most scenarios, and the only function that has been extended to the multiple exposure case.
 
-#' @param data Optional. Used when input contains raw data (data frame) or a covariance/correlation matrix, although the latter one is currently not recommended.
-#' If input is a covariance or correlation matrix (latter one not recommended), the lavaan arguments `sample.cov = df_cov` and `sample.nobs = n` are required, where `df_cov` should be the name of your input data and `n` the sample size.
+#' @param data Optional. Used when input contains raw data (data frame).
+#' @param sample.cov Optional. If input is a covariance or correlation matrix (latter one not recommended), the lavaan arguments `sample.cov = df_cov` and `sample.nobs = n` are required, where `df_cov` should be the name of your input matrix and `n` the sample size.
 #' @param h2 Heritability estimate of the outcome (Y).
 #' Can be chosen to be any external value, e.g. SNP- or twin-heritability estimates.
 #' @param exposures Vector of variable name(s) of the exposure(s).
@@ -12,7 +12,7 @@
 #' @param outcome Name of the outcome variable.
 #' @param pgs Name of the polygenic score variable (pgs corresponding to the outcome).
 #' @param model Optional. If additional variables beyond exposures, PGS and outcome are used, e.g., measured confounders,
-#' these additional relations can be specified and will be added to the GsensY model. Example: `model = "X1 ~ Z; X2 ~ Z"`. 
+#' these additional relations can be specified and will be added to the GsensY model. Example: `model = c("X1 ~ Z", "X2 ~ Z")`. 
 #' If `model` is not specified, the standard GsensY model will be estimated. 
 #' @param ... Additional arguments passed from lavaan, including `se` (estimation method for the standard errors),
 #' `estimator` (estimator used for model, default is ML), `bootstrap` (number of bootstraps for CIs, default = 1000),
@@ -50,6 +50,7 @@
 #' *PLoS genetics, 17*(6), e1009590. \doi{10.1371/journal.pgen.1009590}
 
 gsensY = function(data = NULL,
+                  sample.cov = NULL,
                   h2,
                   exposures,
                   outcome,
@@ -62,6 +63,10 @@ gsensY = function(data = NULL,
     covstruc <- outer(exposures,
                       exposures,
                       function(x, y) paste(x, "~~", y))
+    
+    # Residual (co)variances
+    covstruc <- covstruc[lower.tri(covstruc, diag = TRUE)]
+    
     NX <- length(exposures)
     labelsa   <- paste0("a", 1:NX)
     labelsb   <- paste0("b", 1:NX)
@@ -70,11 +75,13 @@ gsensY = function(data = NULL,
     labels_go <- paste0("go_", labelsb)
     labels_eX <- paste0("eX", 1:NX)
     
+    labels_d <- c()
+    
     
     ### main lavaan model ###
     
     # empty variable for genetic confounding
-    gC <- numeric()
+    gC <- c()
     
     # check if additional model arguments were passed on
     if (!is.null(model)) {
@@ -85,26 +92,82 @@ gsensY = function(data = NULL,
     
     ## model specification
     
-    model <- c(model,
+    # check for additional causal effects
+    add <- do.call(paste, c(expand.grid(exposures, exposures), sep = " ~ "))
+    
+    if (any(add %in% model)) {
+        delta <- TRUE
+    } else {
+        delta <- FALSE
+    }
+    
+    # add labels for causal paths
+    if (delta) {
+        add_delta <- add[add %in% model]
+        interm_m <- strsplit(add_delta, " ~ ") %>% unlist()
+        model <- model[model != add_delta]
+    }
+    
+    m_delta <- c()
+    
+    
+    model <- c(
                paste(outcome, "~", paste0(c(labelsb,"c"),"*", c(exposures,"GG"), collapse = " + ")),    # Y depends on X and true polygenic score
                paste(exposures,"~", paste0(labelsa,"*","GG")),                                   # X1-Xi depend on true polygenic score
                paste("GG =~ lg*", pgs),
                "GG ~~ 1*GG",
-               paste0(exposures, " ~~ ", labels_eX, "*", exposures),  
-               
                paste(pgs, " ~~ vp*", pgs), 
                paste(outcome, " ~~ ResVarY*", outcome),
-               # total mediation effect
-               paste("m :=", paste0(labelsa,"*",labelsb, collapse = " + ")),
-               paste0(labelsm, " := ", labelsa,"*",labelsb),                                  # specific mediation pathways for each G->Xi->Y
+
+               # total mediation effect (add causal effects if specified)
+               if (delta) {
+                   for (i in 1:length(add_delta)) {
+                       m_delta[i] <- gsub(" ~ ", paste0(" ~ d", i, " * "), add_delta[i])
+                   }
+                   
+                   # split string to get the labels
+                   x <- strsplit(m_delta, " * ") %>% unlist()
+                   
+                   for (i in 1:length(add_delta)) {
+                       labels_d <- c(labels_d,
+                                     paste0(labelsa[exposures %in% interm_m[2*i]], "*",
+                                            x[5*i - 2], "*", labelsb[exposures %in% interm_m[2*i - 1]]))
+                   }
+                   
+                   covstruc <- covstruc[covstruc != gsub(" ~ ", " ~~ ", add_delta)]
+                   
+                   paste("m :=", paste(paste0(labelsa,"*", labelsb, collapse = " + "), "+", paste0(labels_d, collapse = " + ")))
+                   
+               } else {
+                   paste("m :=", paste0(labelsa,"*",labelsb, collapse = " + "))
+                   
+               },
+              
+               # residual (co)variances 
+               covstruc,
+               # causal effect(s)
+               m_delta,
+               
+               paste0(labelsm, " := ", labelsa,"*",labelsb),    # specific mediation pathways for each G->Xi->Y
                # heritability constraints
                
+               # add external model specifications
+               model,
+               
                ## MODEL CONSTRAINTS:
-               paste0("h := ", paste0(labelsm, collapse = " + ")," + c"),
-               paste(h2, " == (h^2)/VarY"),
+               paste0("h := m + c"), # heritability definition
+               paste(h2, " == (h^2)/VarY"), # constraint
                
                # Observed variance of Y
-               paste("VarY := ", as.numeric(var(data[, outcome]))), # scaling to get the population variance not needed for now -> * (length(!is.na(data[, outcome])) - 1) / length(!is.na(data[, outcome]))),
+               if (is.null(data)) {
+                   paste("VarY := ", sample.cov[rownames(sample.cov) == outcome, colnames(sample.cov) == outcome]) # scaling to get the population variance not needed for now -> * (length(!is.na(data[, outcome])) - 1) / length(!is.na(data[, outcome]))),
+                   
+               } else {
+                   
+                   paste("VarY := ", as.numeric(var(data[, outcome], na.rm = TRUE))) # scaling to get the population variance not needed for now -> * (length(!is.na(data[, outcome])) - 1) / length(!is.na(data[, outcome]))),
+                   
+               },
+                   
                # genetic confounding for each Xi->Y association
                if (NX > 1) {
                    for (i in 1:NX) {     
@@ -113,7 +176,17 @@ gsensY = function(data = NULL,
                                           paste0(labelsa[i],"*", labelsb[-i],"*", labelsa[-i],
                                                  collapse = " + "), " + ", labelsa[i], "*c"))
                    }
-                   gC
+                   
+                   if (delta) {
+                       for (i in length(add_delta)) {
+                           
+                           gC[exposures %in% interm_m[2*i - 1]] <- paste0(gC[exposures %in% interm_m[2*i - 1]], " + ", 
+                                      paste0(labelsa[exposures %in% interm_m[2*i]], "*",
+                                             x[5*i - 2], "*c"))
+                       }
+                   }
+               
+               gC
                } else {
                    
                    (gC <- paste0(labels_gc, " := ",
@@ -127,7 +200,7 @@ gsensY = function(data = NULL,
     ## model estimation options
     
     # run model
-    fit_mod <- lavaan(model = model, data = data, ...)
+    fit_mod <- lavaan(model = model, data = data, sample.cov = sample.cov, ...)
     
     
     ## parameter estimates options
