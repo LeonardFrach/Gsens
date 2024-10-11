@@ -1,0 +1,363 @@
+---
+title: "Type 1 error and bias simulations for Gsens"
+author: "Leo Frach"
+date: "2024-08-13"
+output: pdf_document
+---
+
+Simulations for power analysis comparing Gsens with and without the new correlation = TRUE feature in lavaan, as well as with and without the loading = TRUE option in Gsens (using reliability instead of heritability constraint).
+
+## Load libraries
+
+```{r message=FALSE}
+#remotes::install_github("LeonardFrach/Gsens")
+#library(Gsens)
+library(lavaan)
+library(stringr)
+library(tidyr)
+library(simstandard)
+```
+
+
+## Define parameters of interest
+
+```{r}
+
+n <- c(3000, 10000)
+h2 <- c(0.20, 0.40)
+b1 <- c(0, 0.30)
+b2 <- c(0, 0.15)
+a1 <- c(0, 0.10)
+a2 <- c(0, 0.20)
+pme <- c(0.50, 0.80)
+
+cor12 <- c(0, 0.20)
+
+# create all possible combinations
+combinations <- crossing(n, b1, b2, a1, a2, h2, cor12, pme)
+
+
+# add path coefficient c (effect from GF on Y), which depends on the other indirect effects of GF to Y, on h2 and on measurement error
+combinations$c <-  round(with(combinations, sqrt(h2) - (a1*b1 + a2*b2)), 6) # effect of GF on outcome, half the effect of the total heritability 
+
+combinations <- combinations %>% dplyr::filter(b1 == 0 | a1 == 0 | a2 == 0 | b2 == 0)
+
+```
+
+## Simulate Gsens model
+
+```{r}
+# empty lists for outputs
+estimates_simu <- vector(mode = "list", length = dim(combinations)[1])
+alpha_simu <- vector(mode = "list", length = dim(combinations)[1])
+
+# create list of population models
+population.modelGF <- vector(mode = "list", length = dim(combinations)[1])
+
+myData <- vector(mode = "list", length = length(population.modelGF))
+myDataX <- vector(mode = "list", length = length(population.modelGF))
+```
+
+## Population model
+
+```{r}
+# Simulate the true population models for different combinations of h2, b1, a1 and n
+for (j in 1:length(population.modelGF)) {
+    set.seed(123)
+    population.modelGF[[j]] <-
+        str_glue('                     
+              # paths and loading
+              Y ~ {combinations$b1[j]}*X1 + {combinations$b2[j]}*X2 + {combinations$c[j]}*GF
+              X1 ~ {combinations$a1[j]}*GF
+              X2 ~ {combinations$a2[j]}*GF 
+
+              X1 ~~ {combinations$cor12[j]}*X2
+              
+              GF =~ sqrt({combinations$lg2[j]})*G
+           ')
+}
+
+
+```
+
+# Type 1 error simulations
+
+## Simulate standard Gsens model (heritability) *without* correlation = TRUE feature
+
+```{r}
+Sys.time()
+
+output <- NULL
+
+set.seed(12345)
+
+for (j in 1:length(population.modelGF)) {
+     k = 1000
+     # create empty lists
+     # myData <- vector(mode = "list", length = k)
+     # myDataX <- vector(mode = "list", length = k)
+     # output <- vector(mode = "list", length = k)
+    
+     for (i in 1:k) {
+         myData[[i]] <- sim_standardized(population.modelGF[[j]], n = combinations$n[j],
+                                         latent = TRUE,
+                                         errors = TRUE)
+    
+         # Specify Gsens model (note latent variable here is GG to avoid confusion with simulated GF that is in the dataset).
+         myDataX[[i]] <- myData[[i]][, 1:4]
+    
+         # run gsensY function from script gsens.R
+         output[[i]] <- gsensY(sample.cov = cov(myData[[i]]),
+                               sample.nobs = combinations$n[j],
+                               h2 = combinations$h2[j],
+                               exposures = c("X1", "X2"),
+                               outcome = "Y", pgs = "G",
+                               estimator = "GLS",
+                               loading = FALSE)
+     }
+
+
+    # get average estimates and standard errors for all simulated data sets
+    
+    sum_est = 0
+    sum_se = 0
+    
+    z = rep(k, 9)
+    
+    for (i in 1:k) {
+        
+        z_est <- z - is.na(output[[i]]@external$gsensY$est)
+        z_se <- z - is.na(output[[i]]@external$gsensY$se)
+
+        sum_est <- output[[i]]@external$gsensY$est + sum_est
+        sum_se <- output[[i]]@external$gsensY$se + sum_se
+        
+    }
+    
+    mean_est <- sum_est / z_est
+    mean_se <- sum_se / z_se
+    
+    
+    estimates <- cbind(mean_est, mean_se)
+    rownames(estimates) <- rownames(output[[i]]@external$gsensY)
+    
+    # power
+    count_p <- NULL
+    
+    for (i in 1:k) {
+        count_p <- cbind(output[[i]]@external$gsensY$pvalue, count_p)
+    }
+    
+    
+    alpha <- NULL
+    
+    for (i in 1:dim(count_p)[1]) {
+        alpha[i] <- mean(as.numeric(count_p[i, ]) < 0.05, na.rm = T)
+    }
+    
+    estimates_simu[[j]] <- estimates
+    alpha_simu[[j]] <- round(alpha, 3)
+}
+
+Sys.time()
+
+alpha_simu
+estimates_simu
+
+# add to combinations df
+for (i in 1:length(alpha_simu)) {
+    combinations$alpha_b1[i] <- alpha_simu[[i]][1] %>% as.numeric()
+    combinations$alpha_b2[i] <- alpha_simu[[i]][2] %>% as.numeric()
+    combinations$alpha_m1[i] <- alpha_simu[[i]][3] %>% as.numeric()
+    combinations$alpha_m2[i] <- alpha_simu[[i]][4] %>% as.numeric()
+    combinations$alpha_m_total[i] <- alpha_simu[[i]][5] %>% as.numeric()
+    combinations$alpha_gc1[i] <- alpha_simu[[i]][6] %>% as.numeric()
+    combinations$alpha_gc2[i] <- alpha_simu[[i]][7] %>% as.numeric()
+}
+
+for (i in 1:length(estimates_simu)) {
+    combinations$est_b1[i] <- round(estimates_simu[[i]][1] %>% as.numeric(), 3)
+    combinations$est_b2[i] <- round(estimates_simu[[i]][2] %>% as.numeric(), 3)
+    combinations$est_m1[i] <- round(estimates_simu[[i]][3] %>% as.numeric(), 3)
+    combinations$est_m2[i] <- round(estimates_simu[[i]][4] %>% as.numeric(), 3)
+    combinations$est_m_total[i] <- round(estimates_simu[[i]][5] %>% as.numeric(), 3)
+    combinations$est_gc1[i] <- round(estimates_simu[[i]][6] %>% as.numeric(), 3)
+    combinations$est_gc2[i] <- round(estimates_simu[[i]][7] %>% as.numeric(), 3)
+}
+
+
+combinations$bias_b1 <- combinations$est_b1 - combinations$b1 
+combinations$bias_b2 <- combinations$est_b2 - combinations$b2
+combinations$bias_m1 <- combinations$est_m1 - (combinations$a1 * combinations$b1)
+combinations$bias_m2 <- combinations$est_m2 - (combinations$a2 * combinations$b2) 
+combinations$bias_m_total <- combinations$est_m_total - ((combinations$a1 * combinations$b1) + (combinations$a2 * combinations$b2)) 
+
+combinations$bias_gc1 <- combinations$est_gc1 - ((combinations$a1 * combinations$c) + (combinations$a2 * combinations$b2)) 
+
+combinations$bias_gc2 <- combinations$est_gc2 - ((combinations$a2 * combinations$c) + (combinations$a1 * combinations$b1))
+
+save(combinations, file = "alpha.RData")
+
+
+```
+
+# Plot type 1 error and bias
+```{r}
+library(ggplot2)
+
+# add info on effect sizes
+df <- na.omit(combinations) 
+#df <- pivot_longer()
+
+df_alpha_b1 <- df %>% 
+    dplyr::filter(b1 == 0) %>%
+    dplyr::mutate(pme = as.factor(pme),
+                  cor12 = as.factor(cor12),
+                  h2 = as.factor(h2))
+
+df_a_b1 <- df_alpha_b1 %>% group_by(pme, n) %>%
+    summarise(alpha = mean(alpha_b1))
+
+library(wesanderson)
+library(colorBlindness)
+
+
+colorBlindness::availablePalette()
+colorBlindness::displayAllColors(paletteMartin)
+
+cols <- paletteMartin
+cols
+# Black    SherpaBlue  PersianGreen       HotPink   CottonCandy PigmentIndigo   ScienceBlue    Heliotrope        Malibu    FrenchPass      RedBerry 
+#cols <- c("#000000",  "#009292" , "#ff6db6"  ,  "#490092", "#db6d00" ) 
+cols <- c( "#490092", "#db6d00" ) 
+
+df_alpha_b2 <- df %>% 
+    dplyr::filter(b2 == 0) %>%
+    dplyr::mutate(pme = as.factor(pme),
+                  cor12 = as.factor(cor12),
+                  h2 = as.factor(h2))
+
+df_a_b2 <- df_alpha_b2 %>% group_by(pme, n) %>%
+    summarise(alpha = mean(alpha_b2))
+
+
+df_alpha_m1 <- df %>% 
+    dplyr::filter(b1 == 0 | a1 == 0) %>%
+    dplyr::mutate(pme = as.factor(pme),
+                  cor12 = as.factor(cor12),
+                  h2 = as.factor(h2))
+
+df_a_m1 <- df_alpha_m1 %>% group_by(pme, n) %>%
+    summarise(alpha = mean(alpha_m1))
+
+df_alpha_m2 <- df %>% 
+    dplyr::filter(a2 == 0 | b2 == 0) %>%
+    dplyr::mutate(pme = as.factor(pme),
+                  cor12 = as.factor(cor12),
+                  h2 = as.factor(h2))
+
+df_a_m2 <- df_alpha_m2 %>% group_by(pme, n) %>%
+    summarise(alpha = mean(alpha_m2))
+
+
+df_alpha_gc1 <- df %>% 
+    dplyr::filter(a1 == 0) %>%
+    dplyr::mutate(pme = as.factor(pme),
+                  cor12 = as.factor(cor12),
+                  h2 = as.factor(h2))
+
+df_a_gc1 <- df_alpha_gc1 %>% group_by(pme, n) %>%
+    summarise(alpha = mean(alpha_gc1))
+
+
+df_alpha_gc2 <- df %>% 
+    dplyr::filter(a2 == 0) %>%
+    dplyr::mutate(pme = as.factor(pme),
+                  cor12 = as.factor(cor12),
+                  h2 = as.factor(h2))
+
+df_a_gc2 <- df_alpha_gc2 %>% group_by(pme, n) %>%
+    summarise(alpha = mean(alpha_gc2))
+
+
+png(filename = "alpha_error_h2_Gsens.png", width = 4000, height = 4000, type = "cairo", res = 600)
+alpha_b1 <- ggplot(df_a_b1, 
+                    aes(x = as.factor(n),
+                        y = alpha,
+                        fill = pme)) + 
+    geom_bar(aes(fill = pme), position = "dodge", stat = "identity") + 
+    geom_hline(yintercept = 0.05, linetype = 2) + 
+    scale_y_continuous(breaks = seq(0, 0.15, 0.01), limits = c(0, 0.15)) + #this line change the frequency of tick marks
+    scale_fill_manual(values =  cols) +
+    labs(fill = "Measurement error", x = "Sample size", y = "Type 1 error") 
+
+alpha_b2 <- ggplot(df_a_b2, 
+                    aes(x = as.factor(n),
+                        y = alpha,
+                        fill = pme)) + 
+    geom_bar(aes(fill = pme), position = "dodge", stat = "identity") + 
+    geom_hline(yintercept = 0.05, linetype = 2) + 
+    scale_y_continuous(breaks = seq(0, 0.15, 0.01), limits = c(0, 0.15)) + #this line change the frequency of tick marks
+    scale_fill_manual(values =  cols) +
+    labs(fill = "Measurement error", x = "Sample size", y = "Type 1 error") 
+
+alpha_m1 <- ggplot(df_a_m1, 
+                    aes(x = as.factor(n),
+                        y = alpha,
+                        fill = pme)) + 
+    geom_bar(aes(fill = pme), position = "dodge", stat = "identity") + 
+    geom_hline(yintercept = 0.05, linetype = 2) + 
+    scale_y_continuous(breaks = seq(0, 0.15, 0.01), limits = c(0, 0.15)) + #this line change the frequency of tick marks
+    scale_fill_manual(values =  cols) +
+    labs(fill = "Measurement error", x = "Sample size", y = "Type 1 error") #+
+    #theme(legend.position = "none")
+
+alpha_m2 <- ggplot(df_a_m2, 
+                    aes(x = as.factor(n),
+                        y = alpha,
+                        fill = pme)) + 
+    geom_bar(aes(fill = pme), position = "dodge", stat = "identity") + 
+    geom_hline(yintercept = 0.05, linetype = 2) + 
+    scale_y_continuous(breaks = seq(0, 0.15, 0.01), limits = c(0, 0.15)) + #this line change the frequency of tick marks
+    scale_fill_manual(values =  cols) +
+    labs(fill = "Measurement error", x = "Sample size", y = "Type 1 error")
+
+alpha_gc1 <- ggplot(df_a_gc1, 
+                    aes(x = as.factor(n),
+                        y = alpha,
+                        fill = pme)) + 
+    geom_bar(aes(fill = pme), position = "dodge", stat = "identity") + 
+    geom_hline(yintercept = 0.05, linetype = 2) + 
+    scale_y_continuous(breaks = seq(0, 0.15, 0.01), limits = c(0, 0.15)) + #this line change the frequency of tick marks
+    scale_fill_manual(values =  cols) +
+    labs(fill = "Measurement error", x = "Sample size", y = "Type 1 error") 
+
+alpha_gc2 <- ggplot(df_a_gc2, 
+                    aes(x = as.factor(n),
+                        y = alpha,
+                        fill = pme)) + 
+    geom_bar(aes(fill = pme), position = "dodge", stat = "identity") + 
+    geom_hline(yintercept = 0.05, linetype = 2) + 
+    scale_y_continuous(breaks = seq(0, 0.15, 0.01), limits = c(0, 0.15)) + #this line change the frequency of tick marks
+    scale_fill_manual(values =  cols) +
+    labs(fill = "Measurement error", x = "Sample size", y = "Type 1 error") 
+
+cowplot::plot_grid(
+    cowplot::plot_grid(alpha_b1 + theme(legend.position = "none"), 
+                       alpha_b2 + theme(legend.position = "none"),
+                       alpha_m1 + theme(legend.position = "none"), 
+                       alpha_m2 + theme(legend.position = "none"), 
+                       alpha_gc1 + theme(legend.position = "none"), 
+                       alpha_gc2 + theme(legend.position = "none"),
+                       ncol = 2,
+                       labels = c("a", "b", "c", "d", "e", "f")),
+    cowplot::get_legend(alpha_b1 + scale_shape(guide = FALSE) + 
+                            theme(legend.position = "right")),
+    nrow = 1, rel_widths = c(.80, .20))
+
+
+dev.off()
+```
+
+
+

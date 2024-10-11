@@ -1,0 +1,352 @@
+---
+title: "Power and bias simulations for Gsens"
+author: "Leo Frach"
+date: "2024-10-02"
+output: pdf_document
+---
+
+Simulations for power analysis comparing Gsens with and without the new correlation = TRUE feature in lavaan, as well as with and without the loading = TRUE option in Gsens (using reliability instead of heritability constraint).
+
+## Load libraries
+
+```{r message=FALSE}
+#remotes::install_github("LeonardFrach/Gsens")
+library(Gsens)
+library(lavaan)
+library(stringr)
+library(tidyr)
+library(simstandard)
+```
+
+
+## Define parameters of interest
+
+```{r}
+
+n <- c(3000, 10000)
+h2 <- c(0.20, 0.40)
+b1 <- c(0.10, 0.30)
+b2 <- c(0.05)
+b3 <- c(0.2)
+a1 <- c(0.10, 0.20)
+a2 <- c(0.1)
+a3 <- c(0.15)
+pme <- c(0.50, 0.80)
+
+cor12 <- c(0, 0.20)
+cor13 <- c(0)
+cor23 <- c(0)
+
+# create all possible combinations
+combinations <- crossing(n, b1, b2, b3, a1, a2, a3, h2, cor12, cor13, cor23, pme)
+
+
+# add path coefficient c (effect from GF on Y), which depends on the other indirect effects of GF to Y, on h2 and on measurement error
+combinations$c <-  round(with(combinations, sqrt(h2) - (a1*b1 + a2*b2 + a3*b3)), 6) # effect of GF on outcome, half the effect of the total heritability 
+
+```
+
+## Simulate Gsens model
+
+```{r}
+# empty lists for outputs
+estimates_simu <- vector(mode = "list", length = dim(combinations)[1])
+power_simu <- vector(mode = "list", length = dim(combinations)[1])
+
+# create list of population models
+population.modelGF <- vector(mode = "list", length = dim(combinations)[1])
+
+myData <- vector(mode = "list", length = length(population.modelGF))
+myDataX <- vector(mode = "list", length = length(population.modelGF))
+```
+
+## Population model
+
+```{r}
+# Simulate the true population models for different combinations of h2, b1, a1 and n
+for (j in 1:length(population.modelGF)) {
+    set.seed(123)
+    population.modelGF[[j]] <-
+        str_glue('                     
+              # paths and loading
+              Y ~ {combinations$b1[j]}*X1 + {combinations$b2[j]}*X2 + {combinations$b3[j]}*X3 + {combinations$c[j]}*GF
+              X1 ~ {combinations$a1[j]}*GF
+              X2 ~ {combinations$a2[j]}*GF 
+              X3 ~ {combinations$a3[j]}*GF 
+
+              X1 ~~ {combinations$cor12[j]}*X2
+              
+              GF =~ sqrt(1-{combinations$pme[j]})*G  
+           ')
+}
+
+
+```
+
+
+# Power simulations
+
+## Simulate standard Gsens model (heritability) *without* correlation = TRUE feature
+
+```{r}
+output <- NULL
+
+Sys.time()
+set.seed(12345)
+for (j in 1:length(population.modelGF)) {
+     k = 1000
+    
+     # create empty lists
+     # myData <- vector(mode = "list", length = k)
+     # myDataX <- vector(mode = "list", length = k)
+     # output <- vector(mode = "list", length = k)
+    
+     for (i in 1:k) {
+         myData[[i]] <- sim_standardized(population.modelGF[[j]], n = combinations$n[j],
+                                         latent = TRUE,
+                                         errors = TRUE)
+    
+         # Specify Gsens model (note latent variable here is GG to avoid confusion with simulated GF that is in the dataset).
+         myDataX[[i]] <- myData[[i]][, 1:4]
+    
+         # run gsensY function from script gsens.R
+         output[[i]] <- gsensY(sample.cov = cov(myData[[i]]),
+                               sample.nobs = combinations$n[j],
+                               h2 = combinations$h2[j],
+                               exposures = c("X1", "X2", "X3"),
+                               outcome = "Y", pgs = "G")
+     }
+
+
+    # get average estimates and standard errors for all simulated data sets
+    
+    sum_est = 0
+    sum_se = 0
+    
+    z = rep(k, 9)
+    
+    for (i in 1:k) {
+        
+        z_est <- z - is.na(output[[i]]@external$gsensY$est)
+        z_se <- z - is.na(output[[i]]@external$gsensY$se)
+        
+        sum_est <- output[[i]]@external$gsensY$est + sum_est
+        sum_se <- output[[i]]@external$gsensY$se + sum_se
+    }
+    
+    mean_est <- sum_est / z_est
+    mean_se <- sum_se / z_se
+    
+    estimates <- cbind(mean_est, mean_se)
+    rownames(estimates) <- rownames(output[[i]]@external$gsensY)
+    
+    # power
+    count_p <- NULL
+    
+    for (i in 1:k) {
+        count_p <- cbind(output[[i]]@external$gsensY$pvalue, count_p)
+    }
+    
+    power <- NULL
+    
+    for (i in 1:dim(count_p)[1]) {
+        power[i] <- mean(as.numeric(count_p[i, ]) < 0.05, na.rm = T)
+    }
+    
+    estimates_simu[[j]] <- estimates
+    power_simu[[j]] <- round(power, 3)
+}
+
+Sys.time()
+
+power_simu
+estimates_simu
+
+# add to combinations df
+for (i in 1:length(power_simu)) {
+    combinations$power_b1[i] <- power_simu[[i]][1] %>% as.numeric()
+    combinations$power_b2[i] <- power_simu[[i]][2] %>% as.numeric()
+    combinations$power_b3[i] <- power_simu[[i]][3] %>% as.numeric()
+    combinations$power_m1[i] <- power_simu[[i]][4] %>% as.numeric()
+    combinations$power_m2[i] <- power_simu[[i]][5] %>% as.numeric()
+    combinations$power_m3[i] <- power_simu[[i]][6] %>% as.numeric()
+    combinations$power_m_total[i] <- power_simu[[i]][7] %>% as.numeric()
+    combinations$power_gc1[i] <- power_simu[[i]][8] %>% as.numeric()
+    combinations$power_gc2[i] <- power_simu[[i]][9] %>% as.numeric()
+    combinations$power_gc3[i] <- power_simu[[i]][10] %>% as.numeric()
+}
+
+for (i in 1:length(estimates_simu)) {
+    combinations$est_b1[i] <- round(estimates_simu[[i]][1] %>% as.numeric(), 3)
+    combinations$est_b2[i] <- round(estimates_simu[[i]][2] %>% as.numeric(), 3)
+    combinations$est_b3[i] <- round(estimates_simu[[i]][3] %>% as.numeric(), 3)
+    combinations$est_m1[i] <- round(estimates_simu[[i]][4] %>% as.numeric(), 3)
+    combinations$est_m2[i] <- round(estimates_simu[[i]][5] %>% as.numeric(), 3)
+    combinations$est_m3[i] <- round(estimates_simu[[i]][6] %>% as.numeric(), 3)
+    combinations$est_m_total[i] <- round(estimates_simu[[i]][7] %>% as.numeric(), 3)
+    combinations$est_gc1[i] <- round(estimates_simu[[i]][8] %>% as.numeric(), 3)
+    combinations$est_gc2[i] <- round(estimates_simu[[i]][9] %>% as.numeric(), 3)
+    combinations$est_gc3[i] <- round(estimates_simu[[i]][10] %>% as.numeric(), 3)
+}
+
+combinations$bias_b1 <- combinations$est_b1 - combinations$b1 
+combinations$bias_b2 <- combinations$est_b2 - combinations$b2 
+combinations$bias_b3 <- combinations$est_b3 - combinations$b3  
+combinations$bias_m1 <- combinations$est_m1 - (combinations$a1 * combinations$b1) 
+combinations$bias_m2 <- combinations$est_m2 - (combinations$a2 * combinations$b2) 
+combinations$bias_m3 <- combinations$est_m3 - (combinations$a3 * combinations$b3) 
+combinations$bias_m_total <-  combinations$est_m_total - ((combinations$a1 * combinations$b1) + (combinations$a2 * combinations$b2) + (combinations$a3 * combinations$b3)) 
+
+combinations$bias_gc1 <- combinations$est_gc1 - ((combinations$a1 * combinations$c) + (combinations$a2 * combinations$b2) + (combinations$a3 * combinations$b3)) 
+
+combinations$bias_gc2 <- combinations$est_gc2 - ((combinations$a2 * combinations$c) + (combinations$a1 * combinations$b1) + (combinations$a3 * combinations$b3))
+
+combinations$bias_gc3 <- combinations$est_gc3 - ((combinations$a3 * combinations$c) + (combinations$a2 * combinations$b2) + (combinations$a1 * combinations$b1)) 
+
+
+openxlsx::write.xlsx(combinations, file = "simu_power_results.xlsx", quote = F, colNames = T, rowNames = F)
+
+```
+
+
+# Plot Power 
+```{r}
+library(ggplot2)
+library(dplyr)
+
+# add info on effect sizes
+df <- na.omit(simu_results) 
+#df <- pivot_longer()
+
+df <- df %>% 
+    dplyr::mutate(pme = as.factor(pme),
+                  cor12 = as.factor(cor12),
+                  h2 = as.factor(h2))
+
+df_power_b1 <- df %>% group_by(pme, n, b1) %>%
+    summarise(power = mean(power_b1))
+
+library(wesanderson)
+library(colorBlindness)
+
+
+colorBlindness::availablePalette()
+colorBlindness::displayAllColors(paletteMartin)
+
+cols <- paletteMartin
+cols
+# Black    SherpaBlue  PersianGreen       HotPink   CottonCandy PigmentIndigo   ScienceBlue    Heliotrope        Malibu    FrenchPass      RedBerry 
+#cols <- c("#000000",  "#009292" , "#ff6db6"  ,  "#490092", "#db6d00" ) 
+cols <- c( "#490092", "#db6d00" ) 
+
+df_power_b2 <- df %>% group_by(pme, n, b2) %>%
+    summarise(power = mean(power_b2))
+
+df_power_b3 <- df %>% group_by(pme, n, b3) %>%
+    summarise(power = mean(power_b3))
+
+
+names(df_power_b1)[3] <- "Effect size"
+names(df_power_b2)[3] <- "Effect size"
+names(df_power_b3)[3] <- "Effect size"
+
+df_power_b <- rbind(df_power_b1, df_power_b2, df_power_b3)
+
+df$m1 <- df$a1 * df$b1
+df$m2 <- df$a2 * df$b2
+df$m3 <- df$a3 * df$b3
+
+
+df_power_m1 <- df %>% group_by(pme, n, m1) %>%
+    summarise(power = mean(power_m1))
+
+df_power_m2 <- df %>% group_by(pme, n, m2) %>%
+    summarise(power = mean(power_m2))
+
+df_power_m3 <- df %>% group_by(pme, n, m3) %>%
+    summarise(power = mean(power_m3))
+
+names(df_power_m1)[3] <- "Effect size"
+names(df_power_m2)[3] <- "Effect size"
+names(df_power_m3)[3] <- "Effect size"
+
+df_power_m <- rbind(df_power_m1, df_power_m2, df_power_m3)
+
+
+df$gc1 <- ((df$a1 * df$c) + (df$a2 * df$b2) + (df$a3 * df$b3))
+df$gc2 <- ((df$a2 * df$c) + (df$a1 * df$b1) + (df$a3 * df$b3))
+df$gc3 <- ((df$a3 * df$c) + (df$a2 * df$b2) + (df$a1 * df$b1))
+
+df_power_gc1 <- df %>% group_by(pme, n, gc1) %>%
+    summarise(power = mean(power_gc1))
+
+df_power_gc2 <- df %>% group_by(pme, n, gc2) %>%
+    summarise(power = mean(power_gc2))
+
+df_power_gc3 <- df %>% group_by(pme, n, gc3) %>%
+    summarise(power = mean(power_gc3))
+
+names(df_power_gc1)[3] <- "Effect size"
+names(df_power_gc2)[3] <- "Effect size"
+names(df_power_gc3)[3] <- "Effect size"
+
+df_power_gc <- rbind(df_power_gc1, df_power_gc2, df_power_gc3)
+
+
+
+png(filename = "power_h2_Gsens.png", width = 4000, height = 2500, type = "cairo", res = 500)
+power_b <- ggplot(df_power_b, 
+                    aes(x = as.factor(n),
+                        y = power,
+                        fill = pme)) + 
+    geom_bar(aes(fill = pme), position = "dodge", stat = "identity") + 
+    geom_hline(yintercept = 0.80, linetype = 2) + 
+    scale_y_continuous(breaks = seq(0, 1, 0.05), limits = c(0, 1)) + #this line change the frequency of tick marks
+    scale_fill_manual(values =  cols) +
+    labs(fill = "Measurement error", x = "Sample size", y = "Power") #+
+    #theme(legend.position = "none")
+
+
+power_m <- ggplot(df_power_m, 
+                    aes(x = as.factor(n),
+                        y = power,
+                        fill = pme)) + 
+    geom_bar(aes(fill = pme), position = "dodge", stat = "identity") + 
+    geom_hline(yintercept = 0.80, linetype = 2) + 
+    scale_y_continuous(breaks = seq(0, 1, 0.05), limits = c(0, 1)) + #this line change the frequency of tick marks
+    scale_fill_manual(values =  cols) +
+    labs(fill = "Measurement error", x = "Sample size", y = "Power") #+
+    #theme(legend.position = "none")
+
+power_gc <- ggplot(df_power_gc, 
+                    aes(x = as.factor(n),
+                        y = power,
+                        fill = pme)) + 
+    geom_bar(aes(fill = pme), position = "dodge", stat = "identity") + 
+    geom_hline(yintercept = 0.80, linetype = 2) + 
+    scale_y_continuous(breaks = seq(0, 1, 0.05), limits = c(0, 1)) + #this line change the frequency of tick marks
+    scale_fill_manual(values =  cols) +
+    labs(fill = "Measurement error", x = "Sample size", y = "Power") 
+
+cowplot::plot_grid(
+    cowplot::plot_grid(power_b + theme(legend.position = "none"), 
+                       power_m + theme(legend.position = "none"), 
+                       power_gc + theme(legend.position = "none"), 
+                       ncol = 3,
+                       labels = c("a", "b", "c")),
+    cowplot::get_legend(power_b + scale_shape(guide = FALSE) + 
+                            theme(legend.position = "bottom")),
+    ncol = 1, rel_heights =  c(.80, .20))
+
+dev.off()
+
+```
+
+
+
+## Save output
+```{r}
+save(combinations, file = 'simu_results_Gsens_power.RData') 
+```
+
+

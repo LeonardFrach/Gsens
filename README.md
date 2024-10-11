@@ -1,7 +1,7 @@
 Simple simulated data set and example
 ================
 Leo Frach
-2024-03-04
+2024-10-11
 
 ## Citation
 

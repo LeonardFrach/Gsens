@@ -4,7 +4,7 @@
 #' This is the recommended function for most scenarios, and the only function that has been extended to the multiple exposure case.
 
 #' @param data Optional. Used when input contains raw data (data frame).
-#' @param sample.cov Optional. If input is a covariance or correlation matrix (latter one not recommended), the lavaan arguments `sample.cov = df_cov` and `sample.nobs = n` are required, where `df_cov` should be the name of your input matrix and `n` the sample size.
+#' @param sample.cov Optional. If input is a covariance or correlation matrix, the lavaan arguments `sample.cov = df_cov` and `sample.nobs = n` are required, where `df_cov` should be the name of your input matrix and `n` the sample size.
 #' @param h2 Heritability estimate of the outcome (Y).
 #' Can be chosen to be any external value, e.g. SNP- or twin-heritability estimates.
 #' @param exposures Vector of variable name(s) of the exposure(s).
@@ -56,7 +56,17 @@ gsensY = function(data = NULL,
                   outcome,
                   pgs,
                   model = NULL,
+                  loading = FALSE,
+                  lg2 = NULL,
                   ...) {
+    
+    #check for correlation flag
+    dotdotdot <- list(...)
+    correlation.flag <- FALSE
+    if (!is.null(dotdotdot$correlation) && dotdotdot$correlation) {
+        correlation.flag <- TRUE
+    }
+    
     
     # create covariance structure and label for the model
     
@@ -65,7 +75,7 @@ gsensY = function(data = NULL,
                       function(x, y) paste(x, "~~", y))
     
     # Residual (co)variances
-    covstruc <- covstruc[lower.tri(covstruc, diag = TRUE)]
+    covstruc <- covstruc[lower.tri(covstruc, diag = !correlation.flag)]
     
     NX <- length(exposures)
     labelsa   <- paste0("a", 1:NX)
@@ -110,92 +120,197 @@ gsensY = function(data = NULL,
     
     m_delta <- c()
     
-    
-    model <- c(
-               paste(outcome, "~", paste0(c(labelsb,"c"),"*", c(exposures,"GG"), collapse = " + ")),    # Y depends on X and true polygenic score
-               paste(exposures,"~", paste0(labelsa,"*","GG")),                                   # X1-Xi depend on true polygenic score
-               paste("GG =~ lg*", pgs),
-               "GG ~~ 1*GG",
-               paste(pgs, " ~~ vp*", pgs), 
-               paste(outcome, " ~~ ResVarY*", outcome),
-
-               # total mediation effect (add causal effects if specified)
-               if (delta) {
-                   for (i in 1:length(add_delta)) {
-                       m_delta[i] <- gsub(" ~ ", paste0(" ~ d", i, " * "), add_delta[i])
-                   }
-                   
-                   # split string to get the labels
-                   x <- strsplit(m_delta, " * ") %>% unlist()
-                   
-                   for (i in 1:length(add_delta)) {
-                       labels_d <- c(labels_d,
-                                     paste0(labelsa[exposures %in% interm_m[2*i]], "*",
-                                            x[5*i - 2], "*", labelsb[exposures %in% interm_m[2*i - 1]]))
-                   }
-                   
-                   covstruc <- covstruc[covstruc != gsub(" ~ ", " ~~ ", add_delta)]
-                   
-                   paste("m :=", paste(paste0(labelsa,"*", labelsb, collapse = " + "), "+", paste0(labels_d, collapse = " + ")))
-                   
-               } else {
-                   paste("m :=", paste0(labelsa,"*",labelsb, collapse = " + "))
-                   
-               },
-              
-               # residual (co)variances 
-               covstruc,
-               # causal effect(s)
-               m_delta,
-               
-               paste0(labelsm, " := ", labelsa,"*",labelsb),    # specific mediation pathways for each G->Xi->Y
-               # heritability constraints
-               
-               # add external model specifications
-               model,
-               
-               ## MODEL CONSTRAINTS:
-               paste0("h := m + c"), # heritability definition
-               paste(h2, " == (h^2)/VarY"), # constraint
-               
-               # Observed variance of Y
-               if (is.null(data)) {
-                   paste("VarY := ", sample.cov[rownames(sample.cov) == outcome, colnames(sample.cov) == outcome]) # scaling to get the population variance not needed for now -> * (length(!is.na(data[, outcome])) - 1) / length(!is.na(data[, outcome]))),
-                   
-               } else {
-                   
-                   paste("VarY := ", as.numeric(var(data[, outcome], na.rm = TRUE))) # scaling to get the population variance not needed for now -> * (length(!is.na(data[, outcome])) - 1) / length(!is.na(data[, outcome]))),
-                   
-               },
-                   
-               # genetic confounding for each Xi->Y association
-               if (NX > 1) {
-                   for (i in 1:NX) {     
-                       
-                       gC <- c(gC, paste0(labels_gc[i], " := ",
-                                          paste0(labelsa[i],"*", labelsb[-i],"*", labelsa[-i],
-                                                 collapse = " + "), " + ", labelsa[i], "*c"))
-                   }
-                   
-                   if (delta) {
-                       for (i in length(add_delta)) {
-                           
-                           gC[exposures %in% interm_m[2*i - 1]] <- paste0(gC[exposures %in% interm_m[2*i - 1]], " + ", 
-                                      paste0(labelsa[exposures %in% interm_m[2*i]], "*",
-                                             x[5*i - 2], "*c"))
-                       }
-                   }
-               
-               gC
-               } else {
-                   
-                   (gC <- paste0(labels_gc, " := ",
-                                 paste0(labelsa, "*c")))
-               },
-               
-               paste0(labels_go, " := ", labelsa,"*", labelsa,"*", labelsb, " + ", labels_gc) # genetic overlap for each Xi->Y association
-    )
-    
+    if (loading == TRUE) {
+        
+        # Correlation of PGS and outcome
+        if (is.null(data)) {
+            df_cor <- cov2cor(sample.cov)
+            rPGS <- df_cor[rownames(df_cor) == outcome, colnames(df_cor) == pgs]
+            
+        } else {
+            
+            rPGS <- as.numeric(cor(data[, outcome], data[, pgs]))
+            
+        }
+        
+        lg2 <- rPGS^2 / h2
+        
+        model <- c(
+            paste(outcome, "~", paste0(c(labelsb,"c"),"*", c(exposures,"GG"), collapse = " + ")),    # Y depends on X and true polygenic score
+            paste(exposures,"~", paste0(labelsa,"*","GG")),                                   # X1-Xi depend on true polygenic score
+            
+            # loading constraint
+            paste("GG =~ ", (sqrt(lg2)),"*", pgs),
+            #paste("GG =~ ", (sqrt(rPGS^2 / h2)),"*", pgs),
+            "GG ~~ 1*GG",
+            paste(pgs, " ~~ ", (1 - lg2), "*", pgs), # this can be freely estimated which would produce slightly larger SEs
+            #paste(pgs, " ~~ ", (1 - (rPGS^2 / h2)), "*", pgs), # this can be freely estimated which would produce slightly larger SEs
+            ifelse(!correlation.flag, paste(outcome, " ~~ ResVarY*", outcome), ""),
+            
+            # total mediation effect (add causal effects if specified)
+            if (delta) {
+                for (i in 1:length(add_delta)) {
+                    m_delta[i] <- gsub(" ~ ", paste0(" ~ d", i, " * "), add_delta[i])
+                }
+                
+                # split string to get the labels
+                x <- strsplit(m_delta, " * ") %>% unlist()
+                
+                for (i in 1:length(add_delta)) {
+                    labels_d <- c(labels_d,
+                                  paste0(labelsa[exposures %in% interm_m[2*i]], "*",
+                                         x[5*i - 2], "*", labelsb[exposures %in% interm_m[2*i - 1]]))
+                }
+                
+                covstruc <- covstruc[covstruc != gsub(" ~ ", " ~~ ", add_delta)]
+                
+                paste("m :=", paste(paste0(labelsa,"*", labelsb, collapse = " + "), "+", paste0(labels_d, collapse = " + ")))
+                
+            } else {
+                paste("m :=", paste0(labelsa,"*",labelsb, collapse = " + "))
+                
+            },
+            
+            # residual (co)variances 
+            covstruc,
+            # causal effect(s)
+            m_delta,
+            
+            paste0(labelsm, " := ", labelsa,"*",labelsb),    # specific mediation pathways for each G->Xi->Y
+            # heritability constraints
+            
+            # add external model specifications
+            model,
+            
+            ## MODEL CONSTRAINTS:
+            paste0("h := m + c"), # heritability definition
+            ifelse(correlation.flag, paste(h2, " == (h^2)/VarY"), ""), # constraint might still be needed for correlation feature
+            
+            # Observed variance of Y
+            if (is.null(data)) {
+                paste("VarY := ", sample.cov[rownames(sample.cov) == outcome, colnames(sample.cov) == outcome]) # scaling to get the population variance not needed for now -> * (length(!is.na(data[, outcome])) - 1) / length(!is.na(data[, outcome]))),
+                
+            } else {
+                
+                paste("VarY := ", as.numeric(var(data[, outcome], na.rm = TRUE))) # scaling to get the population variance not needed for now -> * (length(!is.na(data[, outcome])) - 1) / length(!is.na(data[, outcome]))),
+                
+            },
+            
+            # genetic confounding for each Xi->Y association
+            if (NX > 1) {
+                for (i in 1:NX) {     
+                    
+                    gC <- c(gC, paste0(labels_gc[i], " := ",
+                                       paste0(labelsa[i],"*", labelsb[-i],"*", labelsa[-i],
+                                              collapse = " + "), " + ", labelsa[i], "*c"))
+                }
+                
+                if (delta) {
+                    for (i in length(add_delta)) {
+                        
+                        gC[exposures %in% interm_m[2*i - 1]] <- paste0(gC[exposures %in% interm_m[2*i - 1]], " + ", 
+                                                                       paste0(labelsa[exposures %in% interm_m[2*i]], "*",
+                                                                              x[5*i - 2], "*c"))
+                    }
+                }
+                
+                gC
+            } else {
+                
+                (gC <- paste0(labels_gc, " := ",
+                              paste0(labelsa, "*c")))
+            },
+            
+            paste0(labels_go, " := ", labelsa,"*", labelsa,"*", labelsb, " + ", labels_gc) # genetic overlap for each Xi->Y association
+        )
+    } else {
+        
+        model <- c(
+            paste(outcome, "~", paste0(c(labelsb,"c"),"*", c(exposures,"GG"), collapse = " + ")),    # Y depends on X and true polygenic score
+            paste(exposures,"~", paste0(labelsa,"*","GG")),                                   # X1-Xi depend on true polygenic score
+            paste("GG =~ lg*", pgs),
+            "GG ~~ 1*GG",
+            ifelse(!correlation.flag, paste(pgs, " ~~ vp*", pgs), ""),
+            ifelse(!correlation.flag, paste(outcome, " ~~ ResVarY*", outcome), ""),
+            
+            # total mediation effect (add causal effects if specified)
+            if (delta) {
+                for (i in 1:length(add_delta)) {
+                    m_delta[i] <- gsub(" ~ ", paste0(" ~ d", i, " * "), add_delta[i])
+                }
+                
+                # split string to get the labels
+                x <- strsplit(m_delta, " * ") %>% unlist()
+                
+                for (i in 1:length(add_delta)) {
+                    labels_d <- c(labels_d,
+                                  paste0(labelsa[exposures %in% interm_m[2*i]], "*",
+                                         x[5*i - 2], "*", labelsb[exposures %in% interm_m[2*i - 1]]))
+                }
+                
+                covstruc <- covstruc[covstruc != gsub(" ~ ", " ~~ ", add_delta)]
+                
+                paste("m :=", paste(paste0(labelsa,"*", labelsb, collapse = " + "), "+", paste0(labels_d, collapse = " + ")))
+                
+            } else {
+                paste("m :=", paste0(labelsa,"*",labelsb, collapse = " + "))
+                
+            },
+            
+            # residual (co)variances 
+            covstruc,
+            # causal effect(s)
+            m_delta,
+            
+            paste0(labelsm, " := ", labelsa,"*",labelsb),    # specific mediation pathways for each G->Xi->Y
+            # heritability constraints
+            
+            # add external model specifications
+            model,
+            
+            ## MODEL CONSTRAINTS:
+            paste0("h := m + c"), # heritability definition
+            paste(h2, " == (h^2)/VarY"), # constraint
+            
+            # Observed variance of Y
+            if (is.null(data)) {
+                paste("VarY := ", sample.cov[rownames(sample.cov) == outcome, colnames(sample.cov) == outcome]) # scaling to get the population variance not needed for now -> * (length(!is.na(data[, outcome])) - 1) / length(!is.na(data[, outcome]))),
+                
+            } else {
+                
+                paste("VarY := ", as.numeric(var(data[, outcome], na.rm = TRUE))) # scaling to get the population variance not needed for now -> * (length(!is.na(data[, outcome])) - 1) / length(!is.na(data[, outcome]))),
+                
+            },
+            
+            # genetic confounding for each Xi->Y association
+            if (NX > 1) {
+                for (i in 1:NX) {     
+                    
+                    gC <- c(gC, paste0(labels_gc[i], " := ",
+                                       paste0(labelsa[i],"*", labelsb[-i],"*", labelsa[-i],
+                                              collapse = " + "), " + ", labelsa[i], "*c"))
+                }
+                
+                if (delta) {
+                    for (i in length(add_delta)) {
+                        
+                        gC[exposures %in% interm_m[2*i - 1]] <- paste0(gC[exposures %in% interm_m[2*i - 1]], " + ", 
+                                                                       paste0(labelsa[exposures %in% interm_m[2*i]], "*",
+                                                                              x[5*i - 2], "*c"))
+                    }
+                }
+                
+                gC
+            } else {
+                
+                (gC <- paste0(labels_gc, " := ",
+                              paste0(labelsa, "*c")))
+            },
+            
+            paste0(labels_go, " := ", labelsa,"*", labelsa,"*", labelsb, " + ", labels_gc) # genetic overlap for each Xi->Y association
+        )
+        
+    }
     
     ## model estimation options
     
@@ -241,7 +356,7 @@ gsensY = function(data = NULL,
     
     results$pvalue <- format(2*pnorm(-abs(results$z)), digits = 3, scientific = TRUE)
     results <- results |> dplyr::mutate(dplyr::across(!"pvalue", \(x) round(x, 3)))
-    
+
     
     ## store results in the lavaan object
     fit_mod@external$gsensY <- results
