@@ -4,11 +4,23 @@
 \alias{gsensY}
 \title{Adjusting for genetic confounding using PGS for the outcome}
 \usage{
-gsensY(data, h2, exposures, outcome, pgs, ...)
+gsensY(
+  data = NULL,
+  sample.cov = NULL,
+  h2,
+  exposures,
+  outcome,
+  pgs,
+  model = NULL,
+  loading = FALSE,
+  lg2 = NULL,
+  ...
+)
 }
 \arguments{
-\item{data}{Either a data frame of raw data or a covariance/correlation matrix, although the latter one is currently not recommended.
-If \code{data} is a covariance or correlation matrix, the additional lavaan argument \code{sample.nobs} (number of observations) is required.}
+\item{data}{Optional. Used when input contains raw data (data frame).}
+
+\item{sample.cov}{Optional. If input is a covariance or correlation matrix, the lavaan arguments \code{sample.cov = df_cov} and \code{sample.nobs = n} are required, where \code{df_cov} should be the name of your input matrix and \code{n} the sample size.}
 
 \item{h2}{Heritability estimate of the outcome (Y).
 Can be chosen to be any external value, e.g. SNP- or twin-heritability estimates.}
@@ -19,6 +31,10 @@ Example: \code{exposures = c("x1", "x2")}}
 \item{outcome}{Name of the outcome variable.}
 
 \item{pgs}{Name of the polygenic score variable (pgs corresponding to the outcome).}
+
+\item{model}{Optional. If additional variables beyond exposures, PGS and outcome are used, e.g., measured confounders,
+these additional relations can be specified and will be added to the GsensY model. Example: \code{model = c("X1 ~ Z", "X2 ~ Z")}.
+If \code{model} is not specified, the standard GsensY model will be estimated.}
 
 \item{...}{Additional arguments passed from lavaan, including \code{se} (estimation method for the standard errors),
 \code{estimator} (estimator used for model, default is ML), \code{bootstrap} (number of bootstraps for CIs, default = 1000),
@@ -36,7 +52,10 @@ This is the recommended function for most scenarios, and the only function that 
 \examples{
 \dontrun{
 df <- data.frame(X1, X2, X3, Y, PGS_outcome)
+df_cov <- cov(df)
 gsens_out <- gsensY(data = df, h2 = 0.5, exposures = c("X1", "X2", "X3"), outcome = "Y", pgs = "PGS_outcome")
+gsens_out_cov <- gsensY(sample.cov = df_cov, sample.nobs = 5000, h2 = 0.5, exposures = c("X1", "X2", "X3"), outcome = "Y", pgs = "PGS_outcome")
+
 ## print GsensY results
 gsens_out@external$gsensY
 ## any other standard lavaan output also available
