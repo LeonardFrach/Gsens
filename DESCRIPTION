@@ -1,7 +1,7 @@
 Package: Gsens
 Type: Package
 Title: Genetic sensitivity analysis using polygenic scores
-Version: 0.1.5
+Version: 0.1.6
 Authors@R: c(
     person("Leonard", "Frach", email = "leonard.frach.20@ucl.ac.uk", role = c("cre", "aut"), comment = c(ORCID = "0000-0001-6349-8772")),
     person("Tabea", "Schoeler", role = "cph"),
